@@ -98,37 +98,337 @@ interface IERC20Metadata is IERC20 {
      */
     function decimals() external view returns (uint8);
 }
+
 library SafeMath {
-  function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-    if (a == 0) {
-      return 0;
+    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0) {
+            return 0;
+        }
+        uint256 c = a * b;
+        require(c / a == b);
+        return c;
     }
-    uint256 c = a * b;
-    require(c / a == b);
-    return c;
-  }
 
-  function div(uint256 a, uint256 b) internal pure returns (uint256) {
-    uint256 c = a / b;
-    return c;
-  }
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a / b;
+        return c;
+    }
 
-  function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-    require(b <= a);
-    return a - b;
-  }
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        require(b <= a);
+        return a - b;
+    }
 
-  function add(uint256 a, uint256 b) internal pure returns (uint256) {
-    uint256 c = a + b;
-    require(c >= a);
-    return c;
-  }
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        require(c >= a);
+        return c;
+    }
 
-  function ceil(uint256 a, uint256 m) internal pure returns (uint256) {
-    uint256 c = add(a,m);
-    uint256 d = sub(c,1);
-    return mul(div(d,m),m);
-  }
+    function ceil(uint256 a, uint256 m) internal pure returns (uint256) {
+        uint256 c = add(a, m);
+        uint256 d = sub(c, 1);
+        return mul(div(d, m), m);
+    }
+}
+
+/**
+ * @dev Collection of functions related to the address type
+ */
+library Address {
+    /**
+     * @dev Returns true if `account` is a contract.
+     *
+     * [IMPORTANT]
+     * ====
+     * It is unsafe to assume that an address for which this function returns
+     * false is an externally-owned account (EOA) and not a contract.
+     *
+     * Among others, `isContract` will return false for the following
+     * types of addresses:
+     *
+     *  - an externally-owned account
+     *  - a contract in construction
+     *  - an address where a contract will be created
+     *  - an address where a contract lived, but was destroyed
+     * ====
+     */
+    function isContract(address account) internal view returns (bool) {
+        // This method relies on extcodesize, which returns 0 for contracts in
+        // construction, since the code is only stored at the end of the
+        // constructor execution.
+
+        uint256 size;
+        assembly {
+            size := extcodesize(account)
+        }
+        return size > 0;
+    }
+
+    /**
+     * @dev Replacement for Solidity's `transfer`: sends `amount` wei to
+     * `recipient`, forwarding all available gas and reverting on errors.
+     *
+     * https://eips.ethereum.org/EIPS/eip-1884[EIP1884] increases the gas cost
+     * of certain opcodes, possibly making contracts go over the 2300 gas limit
+     * imposed by `transfer`, making them unable to receive funds via
+     * `transfer`. {sendValue} removes this limitation.
+     *
+     * https://diligence.consensys.net/posts/2019/09/stop-using-soliditys-transfer-now/[Learn more].
+     *
+     * IMPORTANT: because control is transferred to `recipient`, care must be
+     * taken to not create reentrancy vulnerabilities. Consider using
+     * {ReentrancyGuard} or the
+     * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
+     */
+    function sendValue(address payable recipient, uint256 amount) internal {
+        require(address(this).balance >= amount, "Address: insufficient balance");
+
+        (bool success,) = recipient.call{value : amount}("");
+        require(success, "Address: unable to send value, recipient may have reverted");
+    }
+
+    /**
+     * @dev Performs a Solidity function call using a low level `call`. A
+     * plain `call` is an unsafe replacement for a function call: use this
+     * function instead.
+     *
+     * If `target` reverts with a revert reason, it is bubbled up by this
+     * function (like regular Solidity function calls).
+     *
+     * Returns the raw returned data. To convert to the expected return value,
+     * use https://solidity.readthedocs.io/en/latest/units-and-global-variables.html?highlight=abi.decode#abi-encoding-and-decoding-functions[`abi.decode`].
+     *
+     * Requirements:
+     *
+     * - `target` must be a contract.
+     * - calling `target` with `data` must not revert.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionCall(target, data, "Address: low-level call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`], but with
+     * `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, 0, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but also transferring `value` wei to `target`.
+     *
+     * Requirements:
+     *
+     * - the calling contract must have an ETH balance of at least `value`.
+     * - the called Solidity function must be `payable`.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCallWithValue-address-bytes-uint256-}[`functionCallWithValue`], but
+     * with `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(address(this).balance >= value, "Address: insufficient balance for call");
+        require(isContract(target), "Address: call to non-contract");
+
+        (bool success, bytes memory returndata) = target.call{value : value}(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
+        return functionStaticCall(target, data, "Address: low-level static call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal view returns (bytes memory) {
+        require(isContract(target), "Address: static call to non-contract");
+
+        (bool success, bytes memory returndata) = target.staticcall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(isContract(target), "Address: delegate call to non-contract");
+
+        (bool success, bytes memory returndata) = target.delegatecall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    function _verifyCallResult(
+        bool success,
+        bytes memory returndata,
+        string memory errorMessage
+    ) private pure returns (bytes memory) {
+        if (success) {
+            return returndata;
+        } else {
+            // Look for revert reason and bubble it up if present
+            if (returndata.length > 0) {
+                // The easiest way to bubble the revert reason is using memory via assembly
+
+                assembly {
+                    let returndata_size := mload(returndata)
+                    revert(add(32, returndata), returndata_size)
+                }
+            } else {
+                revert(errorMessage);
+            }
+        }
+    }
+}
+
+/**
+ * @title SafeERC20
+ * @dev Wrappers around ERC20 operations that throw on failure (when the token
+ * contract returns false). Tokens that return no value (and instead revert or
+ * throw on failure) are also supported, non-reverting calls are assumed to be
+ * successful.
+ * To use this library you can add a `using SafeERC20 for IERC20;` statement to your contract,
+ * which allows you to call the safe operations as `token.safeTransfer(...)`, etc.
+ */
+library SafeERC20 {
+    using Address for address;
+
+    function safeTransfer(
+        IERC20 token,
+        address to,
+        uint256 value
+    ) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
+    }
+
+    function safeTransferFrom(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 value
+    ) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
+    }
+
+    /**
+     * @dev Deprecated. This function has issues similar to the ones found in
+     * {IERC20-approve}, and its usage is discouraged.
+     *
+     * Whenever possible, use {safeIncreaseAllowance} and
+     * {safeDecreaseAllowance} instead.
+     */
+    function safeApprove(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        // safeApprove should only be called when setting an initial allowance,
+        // or when resetting it to zero. To increase and decrease it, use
+        // 'safeIncreaseAllowance' and 'safeDecreaseAllowance'
+        require(
+            (value == 0) || (token.allowance(address(this), spender) == 0),
+            "SafeERC20: approve from non-zero to non-zero allowance"
+        );
+        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
+    }
+
+    function safeIncreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        uint256 newAllowance = token.allowance(address(this), spender) + value;
+        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+    }
+
+    function safeDecreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+    unchecked {
+        uint256 oldAllowance = token.allowance(address(this), spender);
+        require(oldAllowance >= value, "SafeERC20: decreased allowance below zero");
+        uint256 newAllowance = oldAllowance - value;
+        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+    }
+    }
+
+    /**
+     * @dev Imitates a Solidity high-level call (i.e. a regular function call to a contract), relaxing the requirement
+     * on the return value: the return value is optional (but if data is returned, it must not be false).
+     * @param token The token targeted by the call.
+     * @param data The call data (encoded using abi.encode or one of its variants).
+     */
+    function _callOptionalReturn(IERC20 token, bytes memory data) private {
+        // We need to perform a low level call here, to bypass Solidity's return data size checking mechanism, since
+        // we're implementing it ourselves. We use {Address.functionCall} to perform this call, which verifies that
+        // the target address contains contract code and also asserts for success in the low-level call.
+
+        bytes memory returndata = address(token).functionCall(data, "SafeERC20: low-level call failed");
+        if (returndata.length > 0) {
+            // Return data is optional
+            require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
+        }
+    }
 }
 
 /**
@@ -178,39 +478,13 @@ abstract contract Context {
  */
 contract ERC20 is Context, IERC20, IERC20Metadata {
     using SafeMath for uint256;
-    
-    mapping(address => uint256) private _balances;
 
+    mapping(address => uint256) internal _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
-
     uint256 private _totalSupply;
-
     string private _name;
     string private _symbol;
-    
-    IERC20 public tokenAddress;
-    enum lockTokenBlockNumberType{Month, Quarter, HalfYear, WholeYear}
-    struct Items {
-        address withdrawalAddress;
-        uint256 tokenAmount;
-        uint256 unlockBlockNumber;
-        bool withdrawn;
-        lockTokenBlockNumberType _lockTokenBlockNumberType;
-        uint256 outLpTokenAmount;
-    }
-    
-    uint256 public totalTokenAmount;
-    uint256 public totalStakedTokenAmount;
-    uint256 public depositId;
-    uint256[] public allDepositIds;
-    mapping (address => uint256[]) public depositsByWithdrawalAddress;
-    mapping (uint256 => Items) public lockedToken;
-    mapping(address => uint256) public walletTokenBalance;
-    mapping(address => uint256) public userRecevieLpTokenBalance;
-    
-    event LogWithdrawal(address SentToAddress, uint256 AmountTransferred);
-    event UserLockBkr(address User,uint256 InBkrAmount,uint256 OutLpTokenAmount,lockTokenBlockNumberType LockTokenBlockNumberType);
-    event UserUnlockBkr(address User,uint256 OutBkrAmount,uint256 InLpTokenAmount);
+
 
     /**
      * @dev Sets the values for {name} and {symbol}.
@@ -221,13 +495,11 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * All two of these values are immutable: they can only be set once during
      * construction.
      */
-    constructor(string memory name_, string memory symbol_, IERC20 _stakeToken) {
+    constructor(string memory name_, string memory symbol_) {
         _name = name_;
         _symbol = symbol_;
-        tokenAddress = _stakeToken;
+
     }
-    
-    
 
     /**
      * @dev Returns the name of the token.
@@ -291,8 +563,8 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     /**
      * @dev See {IERC20-allowance}.
      */
-    function allowance(address owner, address spender) public view virtual override returns (uint256) {
-        return _allowances[owner][spender];
+    function allowance(address tokenOwner, address spender) public view virtual override returns (uint256) {
+        return _allowances[tokenOwner][spender];
     }
 
     /**
@@ -329,9 +601,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
         uint256 currentAllowance = _allowances[sender][_msgSender()];
         require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
-        unchecked {
-            _approve(sender, _msgSender(), currentAllowance - amount);
-        }
+    unchecked {
+        _approve(sender, _msgSender(), currentAllowance - amount);
+    }
 
         return true;
     }
@@ -370,9 +642,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
         uint256 currentAllowance = _allowances[_msgSender()][spender];
         require(currentAllowance >= subtractedValue, "ERC20: decreased allowance below zero");
-        unchecked {
-            _approve(_msgSender(), spender, currentAllowance - subtractedValue);
-        }
+    unchecked {
+        _approve(_msgSender(), spender, currentAllowance - subtractedValue);
+    }
 
         return true;
     }
@@ -400,9 +672,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
         require(recipient != address(0), "ERC20: transfer to the zero address");
         uint256 senderBalance = _balances[sender];
         require(senderBalance >= amount, "ERC20: transfer amount exceeds balance");
-        unchecked {
-            _balances[sender] = senderBalance - amount;
-        }
+    unchecked {
+        _balances[sender] = senderBalance - amount;
+    }
         _balances[recipient] += amount;
 
         emit Transfer(sender, recipient, amount);
@@ -425,7 +697,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
         emit Transfer(address(0), account, amount);
 
     }
-    
+
     /**
      * @dev Destroys `amount` tokens from `account`, reducing the
      * total supply.
@@ -441,9 +713,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
         require(account != address(0), "ERC20: burn from the zero address");
         uint256 accountBalance = _balances[account];
         require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
-        unchecked {
-            _balances[account] = accountBalance - amount;
-        }
+    unchecked {
+        _balances[account] = accountBalance - amount;
+    }
         _totalSupply -= amount;
 
         emit Transfer(account, address(0), amount);
@@ -463,116 +735,167 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * - `spender` cannot be the zero address.
      */
     function _approve(
-        address owner,
+        address tokenOwner,
         address spender,
         uint256 amount
     ) internal virtual {
-        require(owner != address(0), "ERC20: approve from the zero address");
+        require(tokenOwner != address(0), "ERC20: approve from the zero address");
         require(spender != address(0), "ERC20: approve to the zero address");
 
-        _allowances[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
+        _allowances[tokenOwner][spender] = amount;
+        emit Approval(tokenOwner, spender, amount);
     }
 
-    
-    function lockTokens( uint256 _amount, lockTokenBlockNumberType _lockTokenBlockNumberType) public returns (uint256 _id) {
+
+}
+
+
+contract LOCKTOKEN is ERC20 {
+    using SafeMath for uint256;
+    using SafeERC20 for IERC20;
+
+    uint256 public numerator;
+    address public owner;
+    uint256 public minimumLockupQuantity;
+    IERC20 public tokenAddress;
+    mapping(uint256 => uint16 ) public lockTokenBlockNumber;
+    uint256 constant denominator = 1000;
+
+    struct Items {
+        address withdrawalAddress;
+        uint256 tokenAmount;
+        uint256 unlockBlockNumber;
+        bool withdrawn;
+        uint256 outLpTokenAmount;
+    }
+
+
+    uint256 public totalTokenAmount;
+    uint256 public totalStakedTokenAmount;
+    uint256 public depositId;
+    uint256[] public allDepositIds;
+    mapping(address => uint256[]) public depositsByWithdrawalAddress;
+    mapping(uint256 => Items) public lockedToken;
+    mapping(address => uint256) public walletTokenBalance;
+    mapping(address => uint256) public userRecevieLpTokenBalance;
+
+    event LogWithdrawal(address SentToAddress, uint256 AmountTransferred);
+    event UserLockBkr(address User, uint256 InBkrAmount, uint256 OutLpTokenAmount, uint256 LockTokenBlockNumber);
+    event UserUnlockBkr(address User, uint256 OutBkrAmount, uint256 InLpTokenAmount);
+
+    constructor (string memory name_, string memory symbol_, IERC20 _stakeToken) ERC20 (name_, symbol_) {
+        tokenAddress = _stakeToken;
+        owner = msg.sender;
+    }
+
+    function setMinimumLockupQuantity(uint256 _minimumLockupQuantity) public {
+        require(msg.sender == owner, " no auth !");
+        minimumLockupQuantity = _minimumLockupQuantity;
+    }
+
+ 
+
+    function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _numerator) public {
+        require(msg.sender == owner, " no auth !");
+        lockTokenBlockNumber[_lockTokenBlockNumber] = _numerator;
+    }
+
+
+    function lockTokens(uint256 _amount, uint256 _lockTokenBlockNumber) public returns (uint256 _id) {
         require(_amount > 0, 'token amount is Zero');
-        require(tokenAddress.approve(address(this), _amount), 'Approve tokens failed');
-        require(tokenAddress.transferFrom(msg.sender, address(this), _amount), 'Transfer of tokens failed');
-        
+        require(lockTokenBlockNumber[_lockTokenBlockNumber] != 0, "_lockTokenBlockNumber  is faild!");
+        tokenAddress.safeApprove(address(this), _amount);
+        tokenAddress.safeTransferFrom(msg.sender, address(this), _amount);
+
         uint256 _unlockBlock = 0;
         uint256 lpAmount = 0;
-        if (_lockTokenBlockNumberType == lockTokenBlockNumberType.Month){
-            _unlockBlock = block.number.add(864000);
-            lpAmount = _amount.mul(130).div(100);
-        }else if(_lockTokenBlockNumberType == lockTokenBlockNumberType.Quarter){
-             _unlockBlock = block.number.add(2592000);
-             lpAmount = _amount.mul(190).div(100);
-        }else if(_lockTokenBlockNumberType == lockTokenBlockNumberType.HalfYear){
-             _unlockBlock = block.number.add(5184000);
-             lpAmount = _amount.mul(280).div(100);
-        }else{
-             _unlockBlock = block.number.add(10368000);
-             lpAmount = _amount.mul(460).div(100);
-        }
+
+        _unlockBlock = block.number.add(_lockTokenBlockNumber);
+
+        lpAmount = _amount.mul(lockTokenBlockNumber[_lockTokenBlockNumber]).div(denominator);
+
         //update balance in address
         walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].add(_amount);
         totalTokenAmount = totalTokenAmount.add(_amount);
         totalStakedTokenAmount = totalStakedTokenAmount.add(lpAmount);
-        
+
         address _withdrawalAddress = msg.sender;
         _id = ++depositId;
-        
+
         lockedToken[_id].withdrawalAddress = _withdrawalAddress;
         lockedToken[_id].tokenAmount = _amount;
         lockedToken[_id].unlockBlockNumber = _unlockBlock;
         lockedToken[_id].withdrawn = false;
-        lockedToken[_id]._lockTokenBlockNumberType = _lockTokenBlockNumberType;
-        lockedToken[_id].outLpTokenAmount = lpAmount; 
-        
+        lockedToken[_id].outLpTokenAmount = lpAmount;
+
         allDepositIds.push(_id);
         depositsByWithdrawalAddress[_withdrawalAddress].push(_id);
         userRecevieLpTokenBalance[msg.sender] = userRecevieLpTokenBalance[msg.sender].add(lpAmount);
-        _mint(msg.sender,lpAmount);
-        
-        emit UserLockBkr(_withdrawalAddress, _amount, lpAmount, _lockTokenBlockNumberType);
-     
+        _mint(msg.sender, lpAmount);
+
+        emit UserLockBkr(_withdrawalAddress, _amount, lpAmount, _lockTokenBlockNumber);
+
     }
-      
+
     function withdrawTokens(uint256 _id) public {
         require(block.number >= lockedToken[_id].unlockBlockNumber, 'Tokens are locked');
         require(msg.sender == lockedToken[_id].withdrawalAddress, 'Can withdraw by withdrawal Address only');
         require(!lockedToken[_id].withdrawn, 'Tokens already withdrawn');
-        require(tokenAddress.transfer(msg.sender, lockedToken[_id].tokenAmount), 'Transfer of tokens failed');
-        require(_balances[msg.sender]>=lockedToken[_id].outLpTokenAmount,"LpToken number less than deposit number!");
+        tokenAddress.safeTransfer(msg.sender, lockedToken[_id].tokenAmount);
+        require(_balances[msg.sender] >= lockedToken[_id].outLpTokenAmount, "LpToken number less than deposit number!");
         userRecevieLpTokenBalance[msg.sender] = userRecevieLpTokenBalance[msg.sender].sub(lockedToken[_id].outLpTokenAmount);
-        _burn(msg.sender,lockedToken[_id].outLpTokenAmount);
-        
+        _burn(msg.sender, lockedToken[_id].outLpTokenAmount);
+
         lockedToken[_id].withdrawn = true;
-        
+
         //update balance in address
         walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].sub(lockedToken[_id].tokenAmount);
         totalStakedTokenAmount = totalStakedTokenAmount.sub(lockedToken[_id].outLpTokenAmount);
         totalTokenAmount = totalTokenAmount.sub(lockedToken[_id].tokenAmount);
-        
-        
+
+
         //remove this id from this address
-        uint256 i; uint256 j;
-        for(j=0; j<depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length; j++){
-            if(depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][j] == _id){
-                for (i = j; i<depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length-1; i++){
-                    depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][i] = depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][i+1];
+        uint256 i;
+        uint256 j;
+        for (j = 0; j < depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length; j++) {
+            if (depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][j] == _id) {
+                for (i = j; i < depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length - 1; i++) {
+                    depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][i] = depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][i + 1];
                 }
-                depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length-1;
+                depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length - 1;
                 break;
             }
         }
         emit LogWithdrawal(msg.sender, lockedToken[_id].tokenAmount);
     }
-    
-    function getUserStakeTotal(address _walletAddress) public view returns(uint256 _stakeTokenTotal,uint256 _recevielLpTokenTotal){
-        return (walletTokenBalance[_walletAddress],userRecevieLpTokenBalance[_walletAddress]);
+
+    function getUserStakeTotal(address _walletAddress) public view returns (uint256 _stakeTokenTotal, uint256 _recevielLpTokenTotal){
+        return (walletTokenBalance[_walletAddress], userRecevieLpTokenBalance[_walletAddress]);
     }
-    
+
     /*get allDepositIds*/
     function getAllDepositIds() view public returns (uint256[] memory _allDepositIds)
     {
         return allDepositIds;
     }
-    
+
+    function getUserAllDepositIds(address user) view public returns (uint256[] memory _userAllDepositIds)
+    {
+        return depositsByWithdrawalAddress[user];
+    }
+
     /*get getDepositDetails*/
     function getDepositDetails(uint256 _id) view public returns (address, address, uint256, uint256, bool)
     {
-        return(address(tokenAddress),lockedToken[_id].withdrawalAddress,lockedToken[_id].tokenAmount,
-        lockedToken[_id].unlockBlockNumber,lockedToken[_id].withdrawn);
+        return (address(tokenAddress), lockedToken[_id].withdrawalAddress, lockedToken[_id].tokenAmount,
+        lockedToken[_id].unlockBlockNumber, lockedToken[_id].withdrawn);
     }
-    
+
     /*get DepositsByWithdrawalAddress*/
     function getDepositsByWithdrawalAddress(address _withdrawalAddress) view public returns (uint256[] memory _depositsByWithdrawalAddress)
     {
         return depositsByWithdrawalAddress[_withdrawalAddress];
     }
-    
-    
-    
+
+
 }
