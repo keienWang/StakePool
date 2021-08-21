@@ -761,7 +761,7 @@ contract LOCKTOKEN is ERC20 {
     mapping(uint256 => uint16 ) public lockTokenBlockNumber;
     uint256 constant denominator = 1000;
 
-    struct Items {
+    struct LockRecord {
         address withdrawalAddress;
         uint256 tokenAmount;
         uint256 unlockBlockNumber;
@@ -770,20 +770,21 @@ contract LOCKTOKEN is ERC20 {
     }
 
 
+    mapping(address => uint256)  public stakingBalance;
     uint256 public totalTokenAmount;
     uint256 public totalStakedTokenAmount;
     uint256 public depositId;
     uint256[] public allDepositIds;
     mapping(address => uint256[]) public depositsByWithdrawalAddress;
-    mapping(uint256 => Items) public lockedToken;
+    mapping(uint256 => LockRecord) public lockedToken;
     mapping(address => uint256) public walletTokenBalance;
     mapping(address => uint256) public userRecevieLpTokenBalance;
 
     event LogWithdrawal(address SentToAddress, uint256 AmountTransferred);
-    event UserLockBkr(address User, uint256 InBkrAmount, uint256 OutLpTokenAmount, uint256 LockTokenBlockNumber);
-    event UserUnlockBkr(address User, uint256 OutBkrAmount, uint256 InLpTokenAmount);
+    event UserLockStakeToken(address User, uint256 InTokenAmount, uint256 OutLpTokenAmount, uint256 LockTokenBlockNumber);
+    event UserUnlockStakeToken(address User, uint256 OutTokenAmount, uint256 InLpTokenAmount);
 
-    constructor (string memory name_, string memory symbol_, IERC20 _stakeToken) ERC20 (name_, symbol_) {
+    constructor (string memory _name, string memory _symbol, IERC20 _stakeToken) ERC20 (_name, _symbol) {
         tokenAddress = _stakeToken;
         owner = msg.sender;
     }
@@ -793,15 +794,13 @@ contract LOCKTOKEN is ERC20 {
         minimumLockupQuantity = _minimumLockupQuantity;
     }
 
- 
-
     function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _numerator) public {
         require(msg.sender == owner, " no auth !");
         lockTokenBlockNumber[_lockTokenBlockNumber] = _numerator;
     }
 
 
-    function lockTokens(uint256 _amount, uint256 _lockTokenBlockNumber) public returns (uint256 _id) {
+    function stake(uint256 _amount, uint256 _lockTokenBlockNumber) public returns (uint256 _id) {
         require(_amount > 0, 'token amount is Zero');
         require(lockTokenBlockNumber[_lockTokenBlockNumber] != 0, "_lockTokenBlockNumber  is faild!");
         tokenAddress.safeApprove(address(this), _amount);
@@ -833,11 +832,11 @@ contract LOCKTOKEN is ERC20 {
         userRecevieLpTokenBalance[msg.sender] = userRecevieLpTokenBalance[msg.sender].add(lpAmount);
         _mint(msg.sender, lpAmount);
 
-        emit UserLockBkr(_withdrawalAddress, _amount, lpAmount, _lockTokenBlockNumber);
+        emit UserLockStakeToken(_withdrawalAddress, _amount, lpAmount, _lockTokenBlockNumber);
 
     }
 
-    function withdrawTokens(uint256 _id) public {
+    function ustake(uint256 _id) public {
         require(block.number >= lockedToken[_id].unlockBlockNumber, 'Tokens are locked');
         require(msg.sender == lockedToken[_id].withdrawalAddress, 'Can withdraw by withdrawal Address only');
         require(!lockedToken[_id].withdrawn, 'Tokens already withdrawn');
@@ -869,6 +868,37 @@ contract LOCKTOKEN is ERC20 {
         emit LogWithdrawal(msg.sender, lockedToken[_id].tokenAmount);
     }
 
+
+     function stakeTokens( uint256 _amount) public {
+        require(_amount > 0, "amount cannot be 0");
+        tokenAddress.safeApprove(address(this), _amount);
+        tokenAddress.safeTransferFrom(msg.sender,address(this),_amount);
+        walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].add(_amount);
+        stakingBalance[msg.sender] = stakingBalance[msg.sender].add( _amount);
+        _mint(msg.sender, _amount);
+        userRecevieLpTokenBalance[msg.sender] = userRecevieLpTokenBalance[msg.sender].add(_amount);
+        
+        totalTokenAmount = totalTokenAmount.add(_amount);
+        totalStakedTokenAmount = totalStakedTokenAmount.add(_amount);
+        emit UserLockStakeToken(msg.sender,  _amount, _amount, 0);
+    }
+
+    // Withdraw LP tokens from MasterChef.
+    function unstakeTokens( uint256 _amount) public {
+        require(stakingBalance[msg.sender] >= _amount, "withdraw: not good");
+        require(_balances[msg.sender] >= _amount, "LpToken number less than deposit number!");
+        _burn(msg.sender, _amount);
+        stakingBalance[msg.sender] = stakingBalance[msg.sender].sub( _amount);
+        
+        walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].sub(_amount);
+        totalStakedTokenAmount = totalStakedTokenAmount.sub(_amount);
+        totalTokenAmount = totalTokenAmount.sub(_amount);
+        
+        tokenAddress.safeTransfer(msg.sender, _amount);
+       
+        emit LogWithdrawal(msg.sender,  _amount);
+    }
+
     function getUserStakeTotal(address _walletAddress) public view returns (uint256 _stakeTokenTotal, uint256 _recevielLpTokenTotal){
         return (walletTokenBalance[_walletAddress], userRecevieLpTokenBalance[_walletAddress]);
     }
@@ -879,9 +909,9 @@ contract LOCKTOKEN is ERC20 {
         return allDepositIds;
     }
 
-    function getUserAllDepositIds(address user) view public returns (uint256[] memory _userAllDepositIds)
+    function getUserAllDepositIds(address _user) view public returns (uint256[] memory _userAllDepositIds)
     {
-        return depositsByWithdrawalAddress[user];
+        return depositsByWithdrawalAddress[_user];
     }
 
     /*get getDepositDetails*/
