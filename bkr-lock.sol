@@ -749,183 +749,196 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
 }
 
-
-contract LOCKTOKEN is ERC20 {
+contract LockToken is ERC20 {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     uint256 public numerator;
     address public owner;
-    uint256 public minimumLockupQuantity;
-    IERC20 public tokenAddress;
-    mapping(uint256 => uint16 ) public lockTokenBlockNumber;
+    uint256 public minimumLockAmount;
+    IERC20 public token;
+    mapping(uint256 => uint16) public lockTokenBlockNumberAndRatios;
     uint256 constant denominator = 1000;
-
+		
     struct LockRecord {
-        address withdrawalAddress;
+        address user;
         uint256 tokenAmount;
+        uint256 lockTokenAmount;
+        uint256 lockBlockNumber;
         uint256 unlockBlockNumber;
-        bool withdrawn;
-        uint256 outLpTokenAmount;
+        bool unlocked;
     }
-
-
-    mapping(address => uint256)  public stakingBalance;
+		
+	// How much LockToken will get when staking 1 token without lock
+	uint256 public stakeTokenRatio = 1000;
+	// user token amount for staking without lock
+    mapping(address => uint256) public userStakedToken;
+    
     uint256 public totalTokenAmount;
-    uint256 public totalStakedTokenAmount;
-    uint256 public depositId;
-    uint256[] public allDepositIds;
-    mapping(address => uint256[]) public depositsByWithdrawalAddress;
-    mapping(uint256 => LockRecord) public lockedToken;
-    mapping(address => uint256) public walletTokenBalance;
-    mapping(address => uint256) public userRecevieLpTokenBalance;
+    uint256 public totalLockTokenAmount;
+    
+    uint256 public currentLockId;
+    uint256[] public allLockIds;
+    
+    mapping(address => uint256[]) public userLockRecordIds;
+    mapping(uint256 => LockRecord) public lockRecords;
+    
+    // Total staked token balance including staked and locked
+    mapping(address => uint256) public userTokenAmount;
+    // Total LockToken balance including staked and locked
+    mapping(address => uint256) public userLockTokenAmount;
 
-    event LogWithdrawal(address SentToAddress, uint256 AmountTransferred);
-    event UserLockStakeToken(address User, uint256 InTokenAmount, uint256 OutLpTokenAmount, uint256 LockTokenBlockNumber);
-    event UserUnlockStakeToken(address User, uint256 OutTokenAmount, uint256 InLpTokenAmount);
+	event Lock(address User, address ForUser, uint256 TokenAmount, uint256 LockTokenAmount, uint256 LockedBlockNumber);
+    event Unlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount);
+		    
+    event Unstake(address User, uint256 TokenAmount, uint256 LockTokenAmount);
 
-    constructor (string memory _name, string memory _symbol, IERC20 _stakeToken) ERC20 (_name, _symbol) {
-        tokenAddress = _stakeToken;
+    constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio) ERC20 (_name, _symbol) {
+        token = _token;
         owner = msg.sender;
+        stakeTokenRatio = _stakeTokenRatio;
     }
 
-    function setMinimumLockupQuantity(uint256 _minimumLockupQuantity) public {
-        require(msg.sender == owner, " no auth !");
-        minimumLockupQuantity = _minimumLockupQuantity;
+    function setMinimumLockQuantity(uint256 _minimumLockAmount) public {
+        require(msg.sender == owner, "LockToken: not authorized!");
+        minimumLockAmount = _minimumLockAmount;
     }
 
-    function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _numerator) public {
-        require(msg.sender == owner, " no auth !");
-        lockTokenBlockNumber[_lockTokenBlockNumber] = _numerator;
+    function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _lockTokenRatio) public {
+        require(msg.sender == owner, "LockToken: not authorized!");
+        lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
     }
+		
+	// lock token for LockToken
+    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) public returns (uint256 _id) {
+    		require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
+        require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
+        require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
+        
+        //TODO required?
+        token.safeApprove(address(this), _amount);
+        token.safeTransferFrom(_forUser, address(this), _amount);
+				
+        uint256 unlockBlock = block.number.add(_lockTokenBlockNumber);
 
+        uint256 lockTokenAmount = _amount.mul(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber]).div(denominator);
 
-    function stake(uint256 _amount, uint256 _lockTokenBlockNumber) public returns (uint256 _id) {
-        require(_amount > 0, 'token amount is Zero');
-        require(lockTokenBlockNumber[_lockTokenBlockNumber] != 0, "_lockTokenBlockNumber  is faild!");
-        tokenAddress.safeApprove(address(this), _amount);
-        tokenAddress.safeTransferFrom(msg.sender, address(this), _amount);
-
-        uint256 _unlockBlock = 0;
-        uint256 lpAmount = 0;
-
-        _unlockBlock = block.number.add(_lockTokenBlockNumber);
-
-        lpAmount = _amount.mul(lockTokenBlockNumber[_lockTokenBlockNumber]).div(denominator);
-
-        //update balance in address
-        walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].add(_amount);
+        //update token amount in address
+        userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_amount);
+        
         totalTokenAmount = totalTokenAmount.add(_amount);
-        totalStakedTokenAmount = totalStakedTokenAmount.add(lpAmount);
+        totalLockTokenAmount = totalLockTokenAmount.add(lockTokenAmount);
 
-        address _withdrawalAddress = msg.sender;
-        _id = ++depositId;
+        _id = ++currentLockId;
 
-        lockedToken[_id].withdrawalAddress = _withdrawalAddress;
-        lockedToken[_id].tokenAmount = _amount;
-        lockedToken[_id].unlockBlockNumber = _unlockBlock;
-        lockedToken[_id].withdrawn = false;
-        lockedToken[_id].outLpTokenAmount = lpAmount;
+        lockRecords[_id].user = _forUser;
+        lockRecords[_id].tokenAmount = _amount;
+        lockRecords[_id].lockTokenAmount = lockTokenAmount;
+        lockRecords[_id].lockBlockNumber = block.number;
+        lockRecords[_id].unlockBlockNumber = unlockBlock;
+        lockRecords[_id].unlocked = false;
 
-        allDepositIds.push(_id);
-        depositsByWithdrawalAddress[_withdrawalAddress].push(_id);
-        userRecevieLpTokenBalance[msg.sender] = userRecevieLpTokenBalance[msg.sender].add(lpAmount);
-        _mint(msg.sender, lpAmount);
+        allLockIds.push(_id);
+        userLockRecordIds[_forUser].push(_id);
+        userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].add(lockTokenAmount);
+        _mint(_forUser, lockTokenAmount);
 
-        emit UserLockStakeToken(_withdrawalAddress, _amount, lpAmount, _lockTokenBlockNumber);
-
+        emit Lock(msg.sender, _forUser, _amount, lockTokenAmount, _lockTokenBlockNumber);
     }
 
-    function ustake(uint256 _id) public {
-        require(block.number >= lockedToken[_id].unlockBlockNumber, 'Tokens are locked');
-        require(msg.sender == lockedToken[_id].withdrawalAddress, 'Can withdraw by withdrawal Address only');
-        require(!lockedToken[_id].withdrawn, 'Tokens already withdrawn');
-        tokenAddress.safeTransfer(msg.sender, lockedToken[_id].tokenAmount);
-        require(_balances[msg.sender] >= lockedToken[_id].outLpTokenAmount, "LpToken number less than deposit number!");
-        userRecevieLpTokenBalance[msg.sender] = userRecevieLpTokenBalance[msg.sender].sub(lockedToken[_id].outLpTokenAmount);
-        _burn(msg.sender, lockedToken[_id].outLpTokenAmount);
+    function unlock(uint256 _lockRecordId) public {
+        require(block.number >= lockRecords[_lockRecordId].unlockBlockNumber, 'LockToken: Tokens are still locked');
+        require(msg.sender == lockRecords[_lockRecordId].user, 'LockToken: only can be unlocked by user');
+        require(!lockRecords[_lockRecordId].unlocked, 'LockToken: Tokens has already been unlocked');
+        require(_balances[msg.sender] >= lockRecords[_lockRecordId].lockTokenAmount, "LockToken: LockToken balance is not enough!");
+        
+        token.safeTransfer(msg.sender, lockRecords[_lockRecordId].tokenAmount);
+        userLockTokenAmount[msg.sender] = userLockTokenAmount[msg.sender].sub(lockRecords[_lockRecordId].lockTokenAmount);
+        _burn(msg.sender, lockRecords[_lockRecordId].lockTokenAmount);
 
-        lockedToken[_id].withdrawn = true;
+        lockRecords[_lockRecordId].unlocked = true;
 
-        //update balance in address
-        walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].sub(lockedToken[_id].tokenAmount);
-        totalStakedTokenAmount = totalStakedTokenAmount.sub(lockedToken[_id].outLpTokenAmount);
-        totalTokenAmount = totalTokenAmount.sub(lockedToken[_id].tokenAmount);
+        //update token amount in address
+        userTokenAmount[msg.sender] = userTokenAmount[msg.sender].sub(lockRecords[_lockRecordId].tokenAmount);
+        totalLockTokenAmount = totalLockTokenAmount.sub(lockRecords[_lockRecordId].lockTokenAmount);
+        totalTokenAmount = totalTokenAmount.sub(lockRecords[_lockRecordId].tokenAmount);
 
-
-        //remove this id from this address
+        //remove this id from user lock record ids
         uint256 i;
         uint256 j;
-        for (j = 0; j < depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length; j++) {
-            if (depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][j] == _id) {
-                for (i = j; i < depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length - 1; i++) {
-                    depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][i] = depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress][i + 1];
+        for (j = 0; j < userLockRecordIds[lockRecords[_lockRecordId].user].length; j++) {
+            if (userLockRecordIds[lockRecords[_lockRecordId].user][j] == _lockRecordId) {
+                for (i = j; i < userLockRecordIds[lockRecords[_lockRecordId].user].length - 1; i++) {
+                    userLockRecordIds[lockRecords[_lockRecordId].user][i] = userLockRecordIds[lockRecords[_lockRecordId].user][i + 1];
                 }
-                depositsByWithdrawalAddress[lockedToken[_id].withdrawalAddress].length - 1;
+                userLockRecordIds[lockRecords[_lockRecordId].user].length - 1;
                 break;
             }
         }
-        emit LogWithdrawal(msg.sender, lockedToken[_id].tokenAmount);
+        emit Unlock(msg.sender, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount);
     }
 
-
-     function stakeTokens( uint256 _amount) public {
-        require(_amount > 0, "amount cannot be 0");
-        tokenAddress.safeApprove(address(this), _amount);
-        tokenAddress.safeTransferFrom(msg.sender,address(this),_amount);
-        walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].add(_amount);
-        stakingBalance[msg.sender] = stakingBalance[msg.sender].add( _amount);
-        _mint(msg.sender, _amount);
-        userRecevieLpTokenBalance[msg.sender] = userRecevieLpTokenBalance[msg.sender].add(_amount);
+	// stake token for LockToken without lock
+    function stake(address _forUser, uint256 _tokenAmount) public {
+    		require(stakeTokenRatio > 0, "LockToken: stake not supported");
+        require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
         
-        totalTokenAmount = totalTokenAmount.add(_amount);
-        totalStakedTokenAmount = totalStakedTokenAmount.add(_amount);
-        emit UserLockStakeToken(msg.sender,  _amount, _amount, 0);
+        token.safeApprove(address(this), _tokenAmount);
+        token.safeTransferFrom(_forUser, address(this),_tokenAmount);
+        
+				uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
+        
+        userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_tokenAmount);
+        userStakedToken[_forUser] = userStakedToken[_forUser].add(_tokenAmount);
+        _mint(_forUser, lockTokenAmount);
+        userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].add(lockTokenAmount);
+        
+        totalTokenAmount = totalTokenAmount.add(_tokenAmount);
+        totalLockTokenAmount = totalLockTokenAmount.add(lockTokenAmount);
+        emit Lock(msg.sender, _forUser, _tokenAmount, lockTokenAmount, 0);
     }
 
-    // Withdraw LP tokens from MasterChef.
-    function unstakeTokens( uint256 _amount) public {
-        require(stakingBalance[msg.sender] >= _amount, "withdraw: not good");
-        require(_balances[msg.sender] >= _amount, "LpToken number less than deposit number!");
-        _burn(msg.sender, _amount);
-        stakingBalance[msg.sender] = stakingBalance[msg.sender].sub( _amount);
+    // unstake token for LockToken without lock
+    function unstake(uint256 _tokenAmount) public {
+    		require(stakeTokenRatio > 0, "LockToken: unstake not supported");
+        require(userStakedToken[msg.sender] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
         
-        walletTokenBalance[msg.sender] = walletTokenBalance[msg.sender].sub(_amount);
-        totalStakedTokenAmount = totalStakedTokenAmount.sub(_amount);
-        totalTokenAmount = totalTokenAmount.sub(_amount);
+        uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
         
-        tokenAddress.safeTransfer(msg.sender, _amount);
+        require(_balances[msg.sender] >= lockTokenAmount, "LockToken: LockToken balance is not enough!");
+        
+        _burn(msg.sender, lockTokenAmount);
+        userStakedToken[msg.sender] = userStakedToken[msg.sender].sub(_tokenAmount);
+  			
+        userTokenAmount[msg.sender] = userTokenAmount[msg.sender].sub(_tokenAmount);
+        userLockTokenAmount[msg.sender] = userLockTokenAmount[msg.sender].sub(lockTokenAmount);
+				        
+        totalLockTokenAmount = totalLockTokenAmount.sub(lockTokenAmount);
+        totalTokenAmount = totalTokenAmount.sub(_tokenAmount);
+        
+        token.safeTransfer(msg.sender, _tokenAmount);
        
-        emit LogWithdrawal(msg.sender,  _amount);
+        emit Unstake(msg.sender, _tokenAmount, lockTokenAmount);
+    }
+		
+	// get user's all staked token amount including lock and stake
+    function getUserAllStakedToken(address _user) public view returns (uint256 _tokenAmount, uint256 _stakedTokenAmount){
+        return (userTokenAmount[_user], userLockTokenAmount[_user]);
     }
 
-    function getUserStakeTotal(address _walletAddress) public view returns (uint256 _stakeTokenTotal, uint256 _recevielLpTokenTotal){
-        return (walletTokenBalance[_walletAddress], userRecevieLpTokenBalance[_walletAddress]);
-    }
-
-    /*get allDepositIds*/
-    function getAllDepositIds() view public returns (uint256[] memory _allDepositIds)
+    function getAllLockIds() view public returns (uint256[] memory _allLockIds)
     {
-        return allDepositIds;
+        return allLockIds;
     }
 
-    function getUserAllDepositIds(address _user) view public returns (uint256[] memory _userAllDepositIds)
+    function getUserLockRecordIds(address _user) view public returns (uint256[] memory _userLockRecordIds)
     {
-        return depositsByWithdrawalAddress[_user];
+        return userLockRecordIds[_user];
     }
 
-    /*get getDepositDetails*/
-    function getDepositDetails(uint256 _id) view public returns (address, address, uint256, uint256, bool)
+    function getLockRecord(uint256 _id) view public returns (address, address, uint256, uint256, uint256, uint256, bool)
     {
-        return (address(tokenAddress), lockedToken[_id].withdrawalAddress, lockedToken[_id].tokenAmount,
-        lockedToken[_id].unlockBlockNumber, lockedToken[_id].withdrawn);
+        return (address(token), lockRecords[_id].user, lockRecords[_id].tokenAmount, lockRecords[_id].lockTokenAmount,
+        lockRecords[_id].lockBlockNumber, lockRecords[_id].unlockBlockNumber, lockRecords[_id].unlocked);
     }
-
-    /*get DepositsByWithdrawalAddress*/
-    function getDepositsByWithdrawalAddress(address _withdrawalAddress) view public returns (uint256[] memory _depositsByWithdrawalAddress)
-    {
-        return depositsByWithdrawalAddress[_withdrawalAddress];
-    }
-
-
 }
