@@ -270,7 +270,7 @@ contract Ownable {
         admin[account] = isTrue;
     }
 
-    
+
     modifier onlyAdmin virtual {
         require( admin[msg.sender] || msg.sender == _owner);
         _;
@@ -299,6 +299,7 @@ contract Ownable {
     }
 }
 
+
 contract CheckContract {
     /**
      * Check that the account is an already deployed non-destroyed contract.
@@ -323,92 +324,94 @@ interface LockToken{
         uint256 unlockBlockNumber;
         bool unlocked;
     }
-    
-        function lockRecords(uint256 _id) external returns(address,uint256,uint256,uint256,uint256,bool);
+
+        function getUserLockTotal(address user) external returns(uint256);
+        function getLockRecord(uint256 _id) view external returns (address, address, uint256, uint256, uint256, uint256, bool);
         function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external returns (uint256 _id) ;
         function unlock(address _forUser,uint256 _lockRecordId) external ;
+        function stake(address _forUser, uint256 _tokenAmount) external ;
+        function unstake(address _forUser, uint256 _tokenAmount)external;
 }
 
-contract BKRStaking is Ownable, CheckContract, BaseMath {
+contract TokenStaking is Ownable, CheckContract, BaseMath {
     using SafeMath for uint;
 
     mapping( address => uint) public stakes;
-    uint public totalBKRStaked;
+    uint public stakeTokenTotal;
+    IERC20 public stakeToken;
+    IERC20 public LpToken;
+
     LockToken public lockContractAddress;
 
-    // uint public F_ETH;  // Running sum of ETH fees per-LQTY-staked
-    // uint public F_LUSD; // Running sum of LQTY fees per-LQTY-staked
-    
-    mapping(IERC20 => uint) tokenFee; //Running sum of LBKR fees per-LBKR-staked
+    mapping(IERC20 => uint) tokenFee;
     mapping(IERC20 => bool) tokens;
 
-    // User snapshots of F_ETH and F_LUSD, taken at the point at which their latest deposit was made
-    // mapping (address => Snapshot) public snapshots; 
-
-    // struct Snapshot {
-    //     uint F_ETH_Snapshot;
-    //     uint F_LUSD_Snapshot;
-    // }
-    
     IERC20[] public rewardTokens;
+
     mapping(address => mapping (uint => bool)) userLockId;
     mapping(address => mapping(IERC20 => uint)) user_token_snapshots;
-    
+
     // mapping(address => IERC20) Tokens;
     // ILQTYToken public lqtyToken;
     // ILUSDToken public lusdToken;
-    IERC20 public bkrToken;
+
     mapping(IERC20 => uint) internal Gains;
     // address public troveManagerAddress;
     // address public borrowerOperationsAddress;
     // address public activePoolAddress;
 
     // --- Events ---
-
-    event BKRTokenAddressSet(address _bkrTokenAddress);
-    event LOCKContractAddressSet(LockToken _lusdTokenAddress);
+    event LpTokenAddressSet(IERC20 _lpToken);
+    event StakeTokenAddressSet(address _stakeTokenAddress);
+    event LOCKContractAddressSet(LockToken _rewardTokenAddress);
     // event TroveManagerAddressSet(address _troveManager);
     // event BorrowerOperationsAddressSet(address _borrowerOperationsAddress);
     // event ActivePoolAddressSet(address _activePoolAddress);
 
     event StakeChanged(address indexed staker, uint newStake);
     event StakingGainsWithdrawn(address indexed staker, IERC20 _tokenAddress, uint _tokenGain);
-    event F_ETHUpdated(uint _F_ETH);
-    event F_RewardUpdated(IERC20 _tokenAddress, uint _F_Token);
-    event TotalBKRStakedUpdated(uint _totalBKRStaked);
+    // event F_ETHUpdated(uint _F_ETH);
+    event F_RewardUpdated(IERC20 _rewardtokenAddress, uint _F_Token);
+    event stakeTokenTotalUpdated(uint _totalStakeTokenStaked);
     event EtherSent(address _account, uint _amount);
-    event StakerSnapshotsUpdated(address _staker, IERC20  _token, uint _F_LUSD);
+    event StakerSnapshotsUpdated(address _staker, IERC20  _token, uint _F_RewardToken);
 
     // --- Functions ---
 
     function setAddresses
     (
-        address _bkrTokenAddress,
-        LockToken _lockAddress
-        // address _troveManagerAddress, 
+        address _stakeTokenAddress,
+        LockToken _lockAddress,
+        IERC20 _lpToken
+
+        // address _troveManagerAddress,
         // address _borrowerOperationsAddress,
         // address _activePoolAddress
-    ) 
-        external 
-        onlyOwner 
-         
+    )
+        external
+        onlyOwner
+
     {
-        checkContract(_bkrTokenAddress);
+        checkContract(_stakeTokenAddress);
         checkContract(address(_lockAddress));
+        checkContract(address(_lpToken));
+
         // checkContract(_troveManagerAddress);
         // checkContract(_borrowerOperationsAddress);
         // checkContract(_activePoolAddress);
 
-        bkrToken = IERC20(_bkrTokenAddress);
+        stakeToken = IERC20(_stakeTokenAddress);
         lockContractAddress = _lockAddress;
-       
+        LpToken = _lpToken;
+
         // troveManagerAddress = _troveManagerAddress;
         // borrowerOperationsAddress = _borrowerOperationsAddress;
         // activePoolAddress = _activePoolAddress;
 
-        emit BKRTokenAddressSet(_bkrTokenAddress);
+        emit LpTokenAddressSet(_lpToken);
+        emit StakeTokenAddressSet(_stakeTokenAddress);
         emit LOCKContractAddressSet(_lockAddress);
-       
+
         // emit TroveManagerAddressSet(_troveManagerAddress);
         // emit BorrowerOperationsAddressSet(_borrowerOperationsAddress);
         // emit ActivePoolAddressSet(_activePoolAddress);
@@ -416,11 +419,11 @@ contract BKRStaking is Ownable, CheckContract, BaseMath {
         _renounceOwnership();
     }
 
-    // If caller has a pre-existing stake, send any accumulated ETH and LUSD gains to them. 
-    function stake( uint256 _amount, uint256 _lockTokenBlockNumber) external  {
+    // If caller has a pre-existing stake, send any accumulated ETH and LUSD gains to them.
+    function lock( uint256 _amount, uint256 _lockTokenBlockNumber) external  {
         _requireNonZeroAmount(_amount);
 
-        uint currentStake = stakes[msg.sender];
+        uint currentStake = lockContractAddress.getUserLockTotal(msg.sender);
 
         // Grab any accumulated ETH and LUSD gains from the current stake
         if (currentStake != 0) {
@@ -429,52 +432,55 @@ contract BKRStaking is Ownable, CheckContract, BaseMath {
                      Gains[rewardTokens[i]] = _getPendingRewardTokenGain(rewardTokens[i] ,msg.sender);
                 }
             }
-            
+
             // ETHGain = _getPendingETHGain(msg.sender);
             // LUSDGain = _getPendingLUSDGain(msg.sender);
         }
-    
+
        _updateUserSnapshots(msg.sender);
 
-        uint newStake = currentStake.add(_amount);
+        // uint newStake = currentStake.add(_amount);
 
         // Increase user’s stake and total LQTY staked
-        stakes[msg.sender] = newStake;
-        totalBKRStaked = totalBKRStaked.add(_amount);
-        emit TotalBKRStakedUpdated(totalBKRStaked);
+        // stakes[msg.sender] = newStake;
+        // stakeTokenTotal = stakeTokenTotal.add(_amount);
+        // emit stakeTokenTotalUpdated(stakeTokenTotal);
 
         // Transfer LQTY from caller to this contract
         // lqtyToken.sendToLQTYStaking(msg.sender, _amount);
-        uint256 lockId = lockContractAddress.lock(msg.sender, _amount, _lockTokenBlockNumber);
-        userLockId[msg.sender][lockId] = true;
-        emit StakeChanged(msg.sender, newStake);
+        lockContractAddress.lock(msg.sender, _amount, _lockTokenBlockNumber);
+        // userLockId[msg.sender][lockId] = true;
+        // emit StakeChanged(msg.sender, newStake);
         // emit StakingGainsWithdrawn(msg.sender, LUSDGain, ETHGain);
 
          // Send accumulated LUSD and ETH gains to the caller
         if (currentStake != 0) {
-            
+
             for (uint i = 0; i < rewardTokens.length; i++){
                 if (address(rewardTokens[i])!=address(0)){
                      rewardTokens[i].transfer(msg.sender, Gains[rewardTokens[i]]);
                      Gains[rewardTokens[i]] = 0;
                 }
             }
-        
+
             // lusdToken.transfer(msg.sender, LUSDGain);
             // _sendETHGainToUser(ETHGain);
         }
     }
 
-    // Unstake the LQTY and send the it back to the caller, along with their accumulated LUSD & ETH gains. 
+    // Unstake the LQTY and send the it back to the caller, along with their accumulated LUSD & ETH gains.
     // If requested amount > stake, send their entire stake.
-    function unstake(uint256 _lockRecordId) external  {
-        uint currentStake = stakes[msg.sender];
+    function unlock(uint256 _lockRecordId) external  {
+        uint currentStake = lockContractAddress.getUserLockTotal(msg.sender);
         _requireUserHasStake(currentStake);
 
-        require(userLockId[msg.sender][_lockRecordId],"failed!");
+        // require(userLockId[msg.sender][_lockRecordId],"failed!");
 
-        userLockId[msg.sender][_lockRecordId] = false;
+        // userLockId[msg.sender][_lockRecordId] = false;
         // mapping(IERC20 => uint) storage Gains;
+        (,,,uint _LptokanAmount,,,) = lockContractAddress.getLockRecord(_lockRecordId);
+        require(LpToken.transferFrom(msg.sender, address(this), _LptokanAmount),"transferFrom failed!");
+
 
         // Grab any accumulated ETH and LUSD gains from the current stake
         if (currentStake != 0) {
@@ -483,34 +489,34 @@ contract BKRStaking is Ownable, CheckContract, BaseMath {
                      Gains[rewardTokens[i]] = _getPendingRewardTokenGain(rewardTokens[i] ,msg.sender);
                 }
             }
-            
+
             // ETHGain = _getPendingETHGain(msg.sender);
             // LUSDGain = _getPendingLUSDGain(msg.sender);
         }
-        
+
         // Grab any accumulated ETH and LUSD gains from the current stake
         // uint ETHGain = _getPendingETHGain(msg.sender);
         // uint LUSDGain = _getPendingLUSDGain(msg.sender);
-        
+
         _updateUserSnapshots(msg.sender);
-        
-        (,uint _tokanAmount,,,,) = lockContractAddress.lockRecords(_lockRecordId);
-        if (_tokanAmount > 0) {
+
+        // (,uint _tokanAmount,,,,) = lockContractAddress.lockRecords(_lockRecordId);
+        // if (_tokanAmount > 0) {
             // uint LQTYToWithdraw = LiquityMath._min(_LQTYamount, currentStake);
 
-            uint newStake = currentStake.sub(_tokanAmount);
+            // uint newStake = currentStake.sub(_tokanAmount);
 
             // Decrease user's stake and total LQTY staked
-            stakes[msg.sender] = newStake;
-            totalBKRStaked = totalBKRStaked.sub(_tokanAmount);
-            emit TotalBKRStakedUpdated(_tokanAmount);
+            // stakes[msg.sender] = newStake;
+            // stakeTokenTotal = stakeTokenTotal.sub(_tokanAmount);
+            // emit stakeTokenTotalUpdated(stakeTokenTotal);
 
             // Transfer unstaked LQTY to user
             // lqtyToken.transfer(msg.sender, LQTYToWithdraw);
             lockContractAddress.unlock(msg.sender,_lockRecordId);
 
-            emit StakeChanged(msg.sender, newStake);
-        }
+            // emit StakeChanged(msg.sender, newStake);
+        // }
 
 
         // Send accumulated LUSD and ETH gains to the caller
@@ -524,29 +530,96 @@ contract BKRStaking is Ownable, CheckContract, BaseMath {
                      emit StakingGainsWithdrawn(msg.sender, rewardTokens[i],Gains[rewardTokens[i]]);
                 }
             }
-     
+
+        }
     }
+
+    function stake(address _forUser, uint256 _tokenAmount) public {
+        lockContractAddress.stake(_forUser,_tokenAmount);
+    }
+
+
+    function unstake(uint256 _tokenAmount) public {
+        require(msg.sender != address(0), 'LockToken: _forUser can not be Zero');
+        require(_tokenAmount >= 0, 'LockToken: token amount must be greater than Zero');
+        require(LpToken.transferFrom(msg.sender, address(this), _tokenAmount),"transferFrom failed!");
+        lockContractAddress.unstake(msg.sender, _tokenAmount);
+    }
+
 
     // --- Reward-per-unit-staked increase functions. Called by Liquity core contracts ---
 
     // function increaseF_ETH(uint _ETHFee) external override {
     //     _requireCallerIsTroveManager();
     //     uint ETHFeePerLQTYStaked;
-     
+
     //     if (totalLQTYStaked > 0) {ETHFeePerLQTYStaked = _ETHFee.mul(DECIMAL_PRECISION).div(totalLQTYStaked);}
 
-    //     F_ETH = F_ETH.add(ETHFeePerLQTYStaked); 
+    //     F_ETH = F_ETH.add(ETHFeePerLQTYStaked);
     //     emit F_ETHUpdated(F_ETH);
     // }
+
+    function harvest(IERC20 rewardToken) public {
+        require(tokens[rewardToken]," not support!");
+         uint currentStake = lockContractAddress.getUserLockTotal(msg.sender);
+         _requireUserHasStake(currentStake);
+         uint reward = 0;
+        if (address(rewardToken)!=address(0)){
+                     reward  = _getPendingRewardTokenGain(rewardToken ,msg.sender);
+        }
+         _updateUserSnapshot(msg.sender, rewardToken);
+
+         if (address(rewardToken)!=address(0)){
+                     rewardToken.transfer(msg.sender, Gains[rewardToken]);
+
+                     emit StakingGainsWithdrawn(msg.sender, rewardToken,reward);
+                }
+    }
+
+
+    function harvestAll() public {
+        uint currentStake = lockContractAddress.getUserLockTotal(msg.sender);
+        _requireUserHasStake(currentStake);
+
+        // require(userLockId[msg.sender][_lockRecordId],"failed!");
+        // userLockId[msg.sender][_lockRecordId] = false;
+        // mapping(IERC20 => uint) storage Gains;
+        // (,,,uint _LptokanAmount,,,) = lockContractAddress.getLockRecord(_lockRecordId);
+        // require(LpToken.transferFrom(msg.sender, address(this), _LptokanAmount),"transferFrom failed!");
+
+
+        // Grab any accumulated ETH and LUSD gains from the current stake
+        if (currentStake != 0) {
+            for (uint i = 0; i < rewardTokens.length; i++){
+                if (address(rewardTokens[i])!=address(0)){
+                     Gains[rewardTokens[i]] = _getPendingRewardTokenGain(rewardTokens[i] ,msg.sender);
+                }
+            }
+
+            // ETHGain = _getPendingETHGain(msg.sender);
+            // LUSDGain = _getPendingLUSDGain(msg.sender);
+        }
+        _updateUserSnapshots(msg.sender);
+
+        if (currentStake != 0) {
+            for (uint i = 0; i < rewardTokens.length; i++){
+                if (address(rewardTokens[i])!=address(0)){
+                     rewardTokens[i].transfer(msg.sender, Gains[rewardTokens[i]]);
+                     Gains[rewardTokens[i]] = 0;
+                     emit StakingGainsWithdrawn(msg.sender, rewardTokens[i],Gains[rewardTokens[i]]);
+                }
+            }
+
+        }
     }
 
     function increaseF_Token( IERC20 tokenAddress, uint _tokenFee) external  onlyAdmin{
         // _requireCallerIsBorrowerOperations();
-        uint TokenFeePerBKRStaked;
+        uint TokenFeePerStakeTokenStaked;
         require(!tokens[tokenAddress], "TokenAddress not supported!");
-        if (totalBKRStaked > 0) {TokenFeePerBKRStaked = _tokenFee.mul(DECIMAL_PRECISION).div(totalBKRStaked);}
-        
-        tokenFee[tokenAddress] = tokenFee[tokenAddress].add(TokenFeePerBKRStaked);
+        if (stakeTokenTotal > 0) {TokenFeePerStakeTokenStaked = _tokenFee.mul(DECIMAL_PRECISION).div(stakeTokenTotal);}
+
+        tokenFee[tokenAddress] = tokenFee[tokenAddress].add(TokenFeePerStakeTokenStaked);
         emit F_RewardUpdated( tokenAddress, tokenFee[tokenAddress]);
     }
 
@@ -583,19 +656,25 @@ contract BKRStaking is Ownable, CheckContract, BaseMath {
         }
 
     }
+    function _updateUserSnapshot(address _user, IERC20 rewardToken)internal{
+         if (address(rewardToken )!= address(0)){
+            user_token_snapshots[_user][rewardToken] = tokenFee[rewardToken];
+            emit StakerSnapshotsUpdated(_user, rewardToken, tokenFee[rewardToken]);
+            }
+    }
 
     // function _sendETHGainToUser(uint ETHGain) internal {
     //     emit EtherSent(msg.sender, ETHGain);
     //     (bool success, ) = msg.sender.call{value: ETHGain}("");
     //     require(success, "LQTYStaking: Failed to send accumulated ETHGain");
     // }
-    
+
     // --- Account auth functions ---
     function _addRewardToken(IERC20 newToken)external onlyAdmin {
         require(address(newToken) != address(0), "Account cannot be zero address");
         rewardTokens.push(newToken);
         tokens[newToken] = true;
-        
+
     }
     function _delRewardToken(IERC20 delToken)external onlyAdmin {
         require(address(delToken) != address(0), "Account cannot be zero address");
@@ -610,7 +689,7 @@ contract BKRStaking is Ownable, CheckContract, BaseMath {
             }
         }
     }
-    
+
     // --- 'require' functions ---
 
     // function _requireCallerIsTroveManager() internal view {
@@ -625,12 +704,12 @@ contract BKRStaking is Ownable, CheckContract, BaseMath {
     //     require(msg.sender == activePoolAddress, "LQTYStaking: caller is not ActivePool");
     // }
 
-    function _requireUserHasStake(uint currentStake) internal pure {  
-        require(currentStake > 0, 'LQTYStaking: User must have a non-zero stake');  
+    function _requireUserHasStake(uint currentStake) internal pure {
+        require(currentStake > 0, 'Staking: User must have a non-zero stake');
     }
 
     function _requireNonZeroAmount(uint _amount) internal pure {
-        require(_amount > 0, 'LQTYStaking: Amount must be non-zero');
+        require(_amount > 0, 'Staking: Amount must be non-zero');
     }
 
     // receive() external payable {

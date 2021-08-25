@@ -451,6 +451,64 @@ abstract contract Context {
     }
 }
 
+contract Ownable is Context {
+    address private _owner;
+    mapping(address => bool) public  admin;
+    address potentialOwner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnerNominated(address _owner);
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    constructor (){
+        address msgSender = _msgSender();
+        _owner = msgSender;
+        emit OwnershipTransferred(address(0), msgSender);
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view returns (address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(_owner == _msgSender(), "Ownable: caller is not the owner");
+        _;
+    }
+
+
+    function nominatePotentialOwner(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "potential owner can not be the zero address.");
+        potentialOwner = newOwner;
+         emit OwnerNominated(newOwner);
+      }
+    function acceptOwnership() external {
+        require(msg.sender == potentialOwner, "You must be nominated as potential owner before you can accept ownership");
+        emit OwnershipTransferred(_owner, potentialOwner);
+         _owner = potentialOwner;
+        potentialOwner = address(0);
+}
+
+
+    function setAdmin(address account, bool isTrue) external onlyOwner {
+        admin[account] = isTrue;
+    }
+
+    modifier onlyAdmin virtual {
+        require( admin[msg.sender] || msg.sender == _owner);
+        _;
+    }
+
+}
+
+
 /**
  * @dev Implementation of the {IERC20} interface.
  *
@@ -745,21 +803,21 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
         _allowances[tokenOwner][spender] = amount;
         emit Approval(tokenOwner, spender, amount);
     }
-
-
 }
 
-contract LockToken is ERC20 {
+
+
+contract LockToken is ERC20, Ownable{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     uint256 public numerator;
-    address public owner;
+
     uint256 public minimumLockAmount;
     IERC20 public token;
     mapping(uint256 => uint16) public lockTokenBlockNumberAndRatios;
     uint256 constant denominator = 1000;
-        
+
     struct LockRecord {
         address user;
         uint256 tokenAmount;
@@ -768,64 +826,64 @@ contract LockToken is ERC20 {
         uint256 unlockBlockNumber;
         bool unlocked;
     }
-        
-    // How much LockToken will get when staking 1 token without lock
-    uint256 public stakeTokenRatio = 1000;
-    // user token amount for staking without lock
+
+	// How much LockToken will get when staking 1 token without lock
+	uint256 public stakeTokenRatio = 1000;
+	// user token amount for staking without lock
     mapping(address => uint256) public userStakedToken;
-    
+
     uint256 public totalTokenAmount;
     uint256 public totalLockTokenAmount;
-    
+
     uint256 public currentLockId;
     uint256[] public allLockIds;
-    
+
     mapping(address => uint256[]) public userLockRecordIds;
     mapping(uint256 => LockRecord) public lockRecords;
-    
+
     // Total staked token balance including staked and locked
     mapping(address => uint256) public userTokenAmount;
     // Total LockToken balance including staked and locked
     mapping(address => uint256) public userLockTokenAmount;
 
-    event Lock(address User, address ForUser, uint256 TokenAmount, uint256 LockTokenAmount, uint256 LockedBlockNumber);
+	event Lock(address User, address ForUser, uint256 TokenAmount, uint256 LockTokenAmount, uint256 LockedBlockNumber);
     event Unlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount);
-            
+
     event Unstake(address User, uint256 TokenAmount, uint256 LockTokenAmount);
 
     constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio) ERC20 (_name, _symbol) {
         token = _token;
-        owner = msg.sender;
+
         stakeTokenRatio = _stakeTokenRatio;
     }
 
-    function setMinimumLockQuantity(uint256 _minimumLockAmount) public {
-        require(msg.sender == owner, "LockToken: not authorized!");
+    function setMinimumLockQuantity(uint256 _minimumLockAmount) public onlyAdmin {
+
         minimumLockAmount = _minimumLockAmount;
     }
 
-    function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _lockTokenRatio) public {
-        require(msg.sender == owner, "LockToken: not authorized!");
+    function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _lockTokenRatio) public onlyAdmin{
+
         lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
     }
-        
-    // lock token for LockToken
-    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) public returns (uint256 _id) {
-        require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
+
+	// lock token for LockToken
+    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) public onlyAdmin returns (uint256 _id) {
+    	require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
         require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
-        
+
         //TODO required?
         // token.safeApprove(address(this), _amount);
         token.safeTransferFrom(_forUser, address(this), _amount);
-                
+
         uint256 unlockBlock = block.number.add(_lockTokenBlockNumber);
 
         uint256 lockTokenAmount = _amount.mul(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber]).div(denominator);
 
         //update token amount in address
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_amount);
-        
+
         totalTokenAmount = totalTokenAmount.add(_amount);
         totalLockTokenAmount = totalLockTokenAmount.add(lockTokenAmount);
 
@@ -846,12 +904,12 @@ contract LockToken is ERC20 {
         emit Lock(msg.sender, _forUser, _amount, lockTokenAmount, _lockTokenBlockNumber);
     }
 
-    function unlock(address _forUser, uint256 _lockRecordId) public {
+    function unlock(address _forUser, uint256 _lockRecordId) public onlyAdmin {
         require(block.number >= lockRecords[_lockRecordId].unlockBlockNumber, 'LockToken: Tokens are still locked');
         require(_forUser == lockRecords[_lockRecordId].user, 'LockToken: only can be unlocked by user');
         require(!lockRecords[_lockRecordId].unlocked, 'LockToken: Tokens has already been unlocked');
         require(_balances[msg.sender] >= lockRecords[_lockRecordId].lockTokenAmount, "LockToken: LockToken balance is not enough!");
-        
+
         token.safeTransfer(_forUser, lockRecords[_lockRecordId].tokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].sub(lockRecords[_lockRecordId].lockTokenAmount);
         _burn(msg.sender, lockRecords[_lockRecordId].lockTokenAmount);
@@ -878,50 +936,49 @@ contract LockToken is ERC20 {
         emit Unlock(_forUser, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount);
     }
 
-    // stake token for LockToken without lock
-    function stake(address _forUser, uint256 _tokenAmount) public {
-            require(stakeTokenRatio > 0, "LockToken: stake not supported");
+	// stake token for LockToken without lock
+    function stake(address _forUser, uint256 _tokenAmount) public onlyAdmin {
+    	require(stakeTokenRatio > 0, "LockToken: stake not supported");
         require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
-        
-        token.safeApprove(address(this), _tokenAmount);
+
         token.safeTransferFrom(_forUser, address(this),_tokenAmount);
-        
-                uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-        
+
+		uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
+
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_tokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].add(_tokenAmount);
         _mint(_forUser, lockTokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].add(lockTokenAmount);
-        
+
         totalTokenAmount = totalTokenAmount.add(_tokenAmount);
         totalLockTokenAmount = totalLockTokenAmount.add(lockTokenAmount);
         emit Lock(msg.sender, _forUser, _tokenAmount, lockTokenAmount, 0);
     }
 
     // unstake token for LockToken without lock
-    function unstake(uint256 _tokenAmount) public {
-        require(stakeTokenRatio > 0, "LockToken: unstake not supported");
-        require(userStakedToken[msg.sender] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
-        
+    function unstake(address _forUser, uint256 _tokenAmount) public onlyAdmin{
+    	require(stakeTokenRatio > 0, "LockToken: unstake not supported");
+        require(userStakedToken[_forUser] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
+
         uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-        
+
         require(_balances[msg.sender] >= lockTokenAmount, "LockToken: LockToken balance is not enough!");
-        
+
         _burn(msg.sender, lockTokenAmount);
-        userStakedToken[msg.sender] = userStakedToken[msg.sender].sub(_tokenAmount);
-            
-        userTokenAmount[msg.sender] = userTokenAmount[msg.sender].sub(_tokenAmount);
-        userLockTokenAmount[msg.sender] = userLockTokenAmount[msg.sender].sub(lockTokenAmount);
-                        
+        userStakedToken[_forUser] = userStakedToken[_forUser].sub(_tokenAmount);
+
+        userTokenAmount[_forUser] = userTokenAmount[_forUser].sub(_tokenAmount);
+        userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].sub(lockTokenAmount);
+
         totalLockTokenAmount = totalLockTokenAmount.sub(lockTokenAmount);
         totalTokenAmount = totalTokenAmount.sub(_tokenAmount);
-        
-        token.safeTransfer(msg.sender, _tokenAmount);
-       
-        emit Unstake(msg.sender, _tokenAmount, lockTokenAmount);
+
+        token.safeTransfer(_forUser, _tokenAmount);
+
+        emit Unstake(_forUser, _tokenAmount, lockTokenAmount);
     }
-        
-    // get user's all staked token amount including lock and stake
+
+	// get user's all staked token amount including lock and stake
     function getUserAllStakedToken(address _user) public view returns (uint256 _tokenAmount, uint256 _stakedTokenAmount){
         return (userTokenAmount[_user], userLockTokenAmount[_user]);
     }
