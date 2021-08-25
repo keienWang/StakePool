@@ -326,7 +326,8 @@ interface LockToken{
     }
     
         function getUserLockTotal(address user) external returns(uint256);
-        function getLockRecord(uint256 _id) view external returns (address, address, uint256, uint256, uint256, uint256, bool);
+        function getLockRecord(uint256 _id) view external returns (address _user, uint256 _tokenAmount, 
+        uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
         function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external returns (uint256 _id) ;
         function unlock(address _forUser,uint256 _lockRecordId) external ;
         function stake(address _forUser, uint256 _tokenAmount) external ;
@@ -486,7 +487,7 @@ contract TokenStaking is Ownable, CheckContract, BaseMath {
 
         // userLockId[msg.sender][_lockRecordId] = false;
         // mapping(IERC20 => uint) storage Gains;
-        (,,,uint _LptokanAmount,,,) = lockContractAddress.getLockRecord(_lockRecordId);
+        (,,uint _LptokanAmount,,,) = lockContractAddress.getLockRecord(_lockRecordId);
         require(LpToken.transferFrom(_forUser, address(this), _LptokanAmount),"transferFrom failed!");
         
         // Grab any accumulated ETH and LUSD gains from the current stake
