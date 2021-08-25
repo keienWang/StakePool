@@ -453,7 +453,7 @@ abstract contract Context {
 
 contract Ownable is Context {
     address private _owner;
-    mapping(address => bool) public  admin;
+    mapping(address => bool) public admin;
     address potentialOwner;
     
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -975,7 +975,7 @@ contract LockToken is ERC20, Ownable{
     }
         
     // get user's all staked token amount including lock and stake
-    function getUserAllStakedToken(address _user) public view returns (uint256 _tokenAmount, uint256 _stakedTokenAmount){
+    function getUserAllStakedToken(address _user) public view returns (uint256 _tokenAmount, uint256 _lockTokenAmount){
         return (userTokenAmount[_user], userLockTokenAmount[_user]);
     }
 
@@ -989,9 +989,10 @@ contract LockToken is ERC20, Ownable{
         return userLockRecordIds[_user];
     }
 
-    function getLockRecord(uint256 _id) view public returns (address, address, uint256, uint256, uint256, uint256, bool)
+    function getLockRecord(uint256 _id) view public returns (address _user, uint256 _tokenAmount, 
+        uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked)
     {
-        return (address(token), lockRecords[_id].user, lockRecords[_id].tokenAmount, lockRecords[_id].lockTokenAmount,
+        return (lockRecords[_id].user, lockRecords[_id].tokenAmount, lockRecords[_id].lockTokenAmount,
         lockRecords[_id].lockBlockNumber, lockRecords[_id].unlockBlockNumber, lockRecords[_id].unlocked);
     }
 }
