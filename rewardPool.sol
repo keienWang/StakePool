@@ -478,7 +478,7 @@ contract TokenStaking is Ownable, CheckContract, BaseMath {
 
     // Unstake the LQTY and send the it back to the caller, along with their accumulated LUSD & ETH gains. 
     // If requested amount > stake, send their entire stake.
-    function unlock(uint256 _lockRecordId) external  {
+    function unlock(address _forUser, uint256 _lockRecordId) external  {
         uint currentStake = lockContractAddress.getUserLockTotal(msg.sender);
         _requireUserHasStake(currentStake);
 
@@ -487,9 +487,8 @@ contract TokenStaking is Ownable, CheckContract, BaseMath {
         // userLockId[msg.sender][_lockRecordId] = false;
         // mapping(IERC20 => uint) storage Gains;
         (,,,uint _LptokanAmount,,,) = lockContractAddress.getLockRecord(_lockRecordId);
-        require(LpToken.transferFrom(msg.sender, address(this), _LptokanAmount),"transferFrom failed!");
+        require(LpToken.transferFrom(_forUser, address(this), _LptokanAmount),"transferFrom failed!");
         
-
         // Grab any accumulated ETH and LUSD gains from the current stake
         if (currentStake != 0) {
             for (uint i = 0; i < rewardTokens.length; i++){
@@ -550,11 +549,11 @@ contract TokenStaking is Ownable, CheckContract, BaseMath {
     }
     
     
-    function unstake(uint256 _tokenAmount) public {
+    function unstake( address _forUser, uint256 _tokenAmount) public {
         require(msg.sender != address(0), 'LockToken: _forUser can not be Zero');
         require(_tokenAmount >= 0, 'LockToken: token amount must be greater than Zero');
-        require(LpToken.transferFrom(msg.sender, address(this), _tokenAmount),"transferFrom failed!");
-        lockContractAddress.unstake(msg.sender, _tokenAmount);
+        require(LpToken.transferFrom(_forUser, address(this), _tokenAmount),"transferFrom failed!");
+        lockContractAddress.unstake(_forUser, _tokenAmount);
     }
     
 
