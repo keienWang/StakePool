@@ -307,7 +307,6 @@ contract LockToken is ERC20, Ownable{
     using SafeERC20 for IERC20;
 
     uint256 public numerator;
-    mapping(address => bool) public admin;
     
     IERC20 public token;
     mapping(uint256 => uint16) public lockTokenBlockNumberAndRatios;
@@ -342,10 +341,11 @@ contract LockToken is ERC20, Ownable{
     // Total LockToken balance including staked and locked
     mapping(address => uint256) public userLockTokenAmount;
 
+    mapping(address => bool) public admins;
     bool checkAdmin;
     modifier onlyAdmin virtual {
         if (checkAdmin){
-            require( admin[msg.sender] || msg.sender == owner()); 
+            require(admins[msg.sender] || msg.sender == owner()); 
         }
         _;
     }
@@ -356,14 +356,17 @@ contract LockToken is ERC20, Ownable{
 
     constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio) ERC20 (_name, _symbol) {
         token = _token;
-        admin[msg.sender] = true;
+        admins[msg.sender] = true;
         stakeTokenRatio = _stakeTokenRatio;
+        checkAdmin = true;
     }
-     function setAdmin(address account, bool isTrue) external onlyOwner {
-        admin[account] = isTrue;
+    
+    function setAdmin(address _account, bool _isAdmin) external onlyOwner {
+        admins[_account] = _isAdmin;
     }
-    function setCheckAdmin(bool isCheck)public onlyOwner{
-        checkAdmin = isCheck;
+    
+    function setCheckAdmin(bool _checkAdmin) public onlyOwner{
+        checkAdmin = _checkAdmin;
     }
     
     function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _lockTokenRatio) public onlyAdmin{
@@ -377,8 +380,7 @@ contract LockToken is ERC20, Ownable{
      //   require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
         
-        //TODO required?
-        token.safeApprove(address(this), _amount);
+        //token.safeApprove(address(this), _amount);
         token.safeTransferFrom(msg.sender, address(this), _amount);
                 
         uint256 unlockBlock = block.number.add(_lockTokenBlockNumber);
@@ -444,7 +446,7 @@ contract LockToken is ERC20, Ownable{
     function stake(address _forUser, uint256 _tokenAmount) public onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: stake not supported");
         require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
-        token.safeApprove(address(this), _tokenAmount);
+        //token.safeApprove(address(this), _tokenAmount);
         token.safeTransferFrom(msg.sender, address(this),_tokenAmount);
         
         uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
@@ -486,11 +488,6 @@ contract LockToken is ERC20, Ownable{
         return (userTokenAmount[_user], userLockTokenAmount[_user]);
     }
 
-    function getAllLockIds() view public returns (uint256[] memory _allLockIds)
-    {
-        return allLockIds;
-    }
-
     function getUserLockRecordIds(address _user) view public returns (uint256[] memory _userLockRecordIds)
     {
         return userLockRecordIds[_user];
@@ -502,6 +499,4 @@ contract LockToken is ERC20, Ownable{
         return (lockRecords[_id].user, lockRecords[_id].tokenAmount, lockRecords[_id].lockTokenAmount,
         lockRecords[_id].lockBlockNumber, lockRecords[_id].unlockBlockNumber, lockRecords[_id].unlocked);
     }
-    
-    
 }
