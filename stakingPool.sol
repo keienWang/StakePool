@@ -14,7 +14,7 @@ interface LockToken{
     function  totalTokenAmount()external view returns(uint256 _totalLockTokenAmount);
     function getUserAllStakedToken(address _user) external view returns (uint256 _tokenAmount, uint256 _lockTokenAmount);
     function getLockRecord(uint256 _id) view external returns (address _user, uint256 _tokenAmount, 
-        uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
+    uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
     function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external returns (uint256 _id) ;
     function unlock(address _forUser,uint256 _lockRecordId) external;
     function stake(address _forUser, uint256 _tokenAmount) external;
@@ -74,7 +74,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         
     event EmergencyUnlock(address indexed _user, uint256 indexed _lockId);
         
-        bool stopped;
+    bool stopped;
     modifier notStopped virtual {
             require(!stopped,"this pool is stopped!"); 
         _;
@@ -202,7 +202,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     //     emit F_ETHUpdated(F_ETH);
     // }
     
-    function harvest(address _forUser,IERC20 rewardToken) public {
+    function harvest(address _forUser, IERC20 rewardToken) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         require(tokens[rewardToken]," not support!");
         (uint currentStake,) = lockContract.getUserAllStakedToken(msg.sender);
@@ -231,17 +231,17 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         }
     }
 
-    function increaseTokenReward(IERC20 tokenAddress, uint _reward) external notStopped onlyAdmin{
+    function increaseTokenReward(IERC20 _token, uint _reward) external notStopped onlyAdmin{
         // _requireCallerIsBorrowerOperations();
         uint tokenRewardPerLockTokenStaked;
-        require(!tokens[tokenAddress], "TokenAddress not supported!");
+        require(!tokens[_token], "_token not supported!");
         totalLockTokenAmount = lockContract.totalTokenAmount();
         if (totalLockTokenAmount > 0) {
             tokenRewardPerLockTokenStaked = _reward.mul(DECIMAL_PRECISION).div(totalLockTokenAmount);
         }
         
-        tokensRewards[tokenAddress] = tokensRewards[tokenAddress].add(tokenRewardPerLockTokenStaked);
-        emit RewardUpdated(tokenAddress, tokensRewards[tokenAddress]);
+        tokensRewards[_token] = tokensRewards[_token].add(tokenRewardPerLockTokenStaked);
+        emit RewardUpdated(_token, tokensRewards[_token]);
     }
 
     // --- Pending reward functions ---
@@ -256,11 +256,11 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     //     return ETHGain;
     // }
 
-    function getPendingRewardGain(IERC20 _token ,address _user) external view  returns (uint) {
+    function getPendingRewardGain(IERC20 _token, address _user) external view  returns (uint) {
         return _getPendingRewardTokenGain(_token, _user);
     }
 
-    function _getPendingRewardTokenGain( IERC20 _token, address _user) internal view returns (uint) {
+    function _getPendingRewardTokenGain(IERC20 _token, address _user) internal view returns (uint) {
         uint tokenSnapshot = userTokenSnapshots[_user][_token];
         (uint currentStake,) = lockContract.getUserAllStakedToken(msg.sender);
          _requireUserHasStake(currentStake);
@@ -272,10 +272,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
 
     function _updateUserSnapshots(address _user) internal {
         for (uint256 i = 0;i < rewardTokens.length; i++){
-            if (address(rewardTokens[i] )!= address(0)){
-            userTokenSnapshots[_user][rewardTokens[i]] = tokensRewards[rewardTokens[i]];
-            emit StakerSnapshotsUpdated(_user, rewardTokens[i], tokensRewards[rewardTokens[i]]);
-            }
+            _updateUserSnapshot(_user, rewardTokens[i]);
         }
 
     }
@@ -289,20 +286,21 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     // function _sendETHGainToUser(uint ETHGain) internal {
     //     emit EtherSent(msg.sender, ETHGain);
     //     (bool success, ) = msg.sender.call{value: ETHGain}("");
-    //     require(success, "LQTYStaking: Failed to send accumulated ETHGain");
+    //     require(success, "StakingPool: Failed to send accumulated ETHGain");
     // }
     
     // --- Account auth functions ---
-    function _addRewardToken(IERC20 newToken)external onlyOwner {
-        require(address(newToken) != address(0), "Account cannot be zero address");
-        rewardTokens.push(newToken);
-        tokens[newToken] = true;
+    function _addRewardToken(IERC20 _newToken)external onlyOwner {
+        require(address(_newToken) != address(0), "Account cannot be zero address");
+        rewardTokens.push(_newToken);
+        tokens[_newToken] = true;
     }
-    function _delRewardToken(IERC20 delToken)external onlyOwner {
-        require(address(delToken) != address(0), "Account cannot be zero address");
-        tokens[delToken] = false;
+    
+    function _delRewardToken(IERC20 _delToken)external onlyOwner {
+        require(address(_delToken) != address(0), "Account cannot be zero address");
+        tokens[_delToken] = false;
         for (uint256 i = 1; i < rewardTokens.length; i++){
-            if (rewardTokens[i] == delToken){
+            if (rewardTokens[i] == _delToken){
                 for ( uint256 j = i; j < rewardTokens.length - 1; j++) {
                     rewardTokens[j] = rewardTokens[j + 1];
                 }
@@ -333,23 +331,23 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     // --- 'require' functions ---
 
     // function _requireCallerIsTroveManager() internal view {
-    //     require(msg.sender == troveManagerAddress, "LQTYStaking: caller is not TroveM");
+    //     require(msg.sender == troveManagerAddress, "StakingPool: caller is not TroveM");
     // }
 
     // function _requireCallerIsBorrowerOperations() internal view {
-    //     require(msg.sender == borrowerOperationsAddress, "LQTYStaking: caller is not BorrowerOps");
+    //     require(msg.sender == borrowerOperationsAddress, "StakingPool: caller is not BorrowerOps");
     // }
 
     //  function _requireCallerIsActivePool() internal view {
-    //     require(msg.sender == activePoolAddress, "LQTYStaking: caller is not ActivePool");
+    //     require(msg.sender == activePoolAddress, "StakingPool: caller is not ActivePool");
     // }
 
     function _requireUserHasStake(uint currentStake) internal pure {  
-        require(currentStake > 0, 'Staking: User must have a non-zero stake');  
+        require(currentStake > 0, 'StakingPool: User must have a non-zero stake');  
     }
 
     function _requireNonZeroAmount(uint _amount) internal pure {
-        require(_amount > 0, 'Staking: Amount must be non-zero');
+        require(_amount > 0, 'StakingPool: Amount must be non-zero');
     }
 
     // receive() external payable {
