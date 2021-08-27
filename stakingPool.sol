@@ -85,7 +85,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
             require( admins[msg.sender] || msg.sender == owner()); 
         _;
     }
-    modifier notStart virtual {
+    modifier started virtual {
              require(startBlock <= block.number,"StakingPool: Pool not start!");
         _;
     }
@@ -137,12 +137,12 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         admins[_account] = _isAdmin;
     }
     
-    function setMinimumLockQuantity(uint256 _minimumLockAmount) public onlyAdmin {
+    function setMinimumLockQuantity(uint256 _minimumLockAmount) public onlyOwner {
         minimumLockAmount = _minimumLockAmount;
     }
     
     // If caller has a pre-existing stake, send any accumulated ETH and LUSD gains to them. 
-    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external notStart notStopped {
+    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external started notStopped {
        
         _requireNonZeroAmount(_amount);
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
@@ -155,7 +155,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
 
     // Unstake the LQTY and send the it back to the caller, along with their accumulated LUSD & ETH gains. 
     // If requested amount > stake, send their entire stake.
-    function unlock(address _forUser, uint256 _lockRecordId) external notStopped notStart {
+    function unlock(address _forUser, uint256 _lockRecordId) external  {
         emergencyUnlock(_forUser, _lockRecordId);
         harvestAll(_forUser);
     }
@@ -173,7 +173,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         emit EmergencyUnlock(_forUser, _lockRecordId);
     }
     
-    function stake(address _forUser, uint256 _tokenAmount) public notStart notStopped {
+    function stake(address _forUser, uint256 _tokenAmount) public started notStopped {
 
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
         _requireNonZeroAmount(_tokenAmount);
@@ -184,7 +184,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         harvestAll(_forUser);
     }
     
-    function unstake(address _forUser, uint256 _tokenAmount) public notStart notStopped {
+    function unstake(address _forUser, uint256 _tokenAmount) public  {
 
         harvestAll(_forUser);
         emergencyUnstake(_forUser, _tokenAmount);
@@ -222,7 +222,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
          _requireUserHasStake(currentStake);
          uint reward = 0;
         if (address(_rewardToken)!=address(0)){
-                     reward  = _getPendingRewardTokenGain(_rewardToken ,msg.sender);
+                     reward  = _pendingRewardTokenGain(_rewardToken ,msg.sender);
         }
          _updateUserSnapshot(msg.sender, _rewardToken);
          
@@ -238,13 +238,13 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
        
         for (uint i = 0; i < rewardTokens.length; i++){
             if (address(rewardTokens[i]) != address(0)){
-                Gains[rewardTokens[i]] = _getPendingRewardTokenGain(rewardTokens[i] ,_forUser);
+                Gains[rewardTokens[i]] = _pendingRewardTokenGain(rewardTokens[i] ,_forUser);
             }
             harvest(_forUser, rewardTokens[i]);
         }
     }
 
-    function increaseTokenReward(IERC20 _tokenAddress, uint _reward) external notStopped notStart onlyAdmin{
+    function increaseTokenReward(IERC20 _tokenAddress, uint _reward) external notStopped started onlyOwner{
         // _requireCallerIsBorrowerOperations();
         uint tokenRewardPerLockTokenStaked;
         require(!tokens[_tokenAddress], "StakingPool : TokenAddress not supported!");
@@ -268,11 +268,11 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     //     return ETHGain;
     // }
 
-    function getPendingRewardGain(IERC20 _token ,address _user) external view  returns (uint) {
-        return _getPendingRewardTokenGain(_token, _user);
+    function pendingRewardGain(IERC20 _token ,address _user) external view  returns (uint) {
+        return _pendingRewardTokenGain(_token, _user);
     }
 
-    function _getPendingRewardTokenGain( IERC20 _token, address _user) internal view returns (uint) {
+    function _pendingRewardTokenGain( IERC20 _token, address _user) internal view returns (uint) {
         uint tokenSnapshot = userTokenSnapshots[_user][_token];
         (uint currentStake,) = lockContract.getUserAllStakedToken(msg.sender);
          _requireUserHasStake(currentStake);
@@ -284,10 +284,11 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
 
     function _updateUserSnapshots(address _user) internal {
         for (uint256 i = 0;i < rewardTokens.length; i++){
-            if (address(rewardTokens[i] )!= address(0)){
-            userTokenSnapshots[_user][rewardTokens[i]] = tokensRewards[rewardTokens[i]];
-            emit StakerSnapshotsUpdated(_user, rewardTokens[i], tokensRewards[rewardTokens[i]]);
-            }
+            // if (address(rewardTokens[i] )!= address(0)){
+            // userTokenSnapshots[_user][rewardTokens[i]] = tokensRewards[rewardTokens[i]];
+            // emit StakerSnapshotsUpdated(_user, rewardTokens[i], tokensRewards[rewardTokens[i]]);
+            // }
+            _updateUserSnapshot(_user, rewardTokens[i]);
         }
 
     }
@@ -325,7 +326,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         }
     }
     
-    function emergencyStop(address  _to) public onlyOwner {
+    function emergencyStop(address  _to) external onlyOwner {
         if (_to == address(0)) {
             _to = payable(msg.sender);
         }
@@ -343,7 +344,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         emit EmergencyStop(msg.sender, _to);
     }
     
-    function restart()public onlyOwner{
+    function restart()external onlyOwner{
         stopped = true;
     }
     
