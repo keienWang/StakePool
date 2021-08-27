@@ -11,7 +11,7 @@ interface LockToken{
         uint256 unlockBlockNumber;
         bool unlocked;
     }
-    
+    function  totalTokenAmount()external view returns(uint256 _totalLockTokenAmount);
     function getUserAllStakedToken(address _user) external view returns (uint256 _tokenAmount, uint256 _lockTokenAmount);
     function getLockRecord(uint256 _id) view external returns (address _user, uint256 _tokenAmount, 
         uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
@@ -27,7 +27,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     using SafeERC20 for IERC20;
 
     uint8 public constant ZERO = 0;
-    mapping(address => uint) public stakes;
+    // mapping(address => uint) public stakes;
     uint public totalLockTokenAmount;
     
     IERC20 public token;
@@ -71,10 +71,10 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     // event EtherSent(address _account, uint _amount);
     event StakerSnapshotsUpdated(address _staker, IERC20 _token, uint _reward);
     event EmergencyStop(address indexed _user, address _to);
-		
+        
     event EmergencyUnlock(address indexed _user, uint256 indexed _lockId);
-		
-		bool stopped;
+        
+        bool stopped;
     modifier notStopped virtual {
             require(!stopped,"this pool is stopped!"); 
         _;
@@ -139,7 +139,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         _requireNonZeroAmount(_amount);
         require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
         require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
-        require(token.transferFrom(msg.sender, address(this), _amount),"not support!");
+        token.safeTransferFrom(msg.sender, address(this), _amount);
         harvestAll(_forUser);
         token.safeApprove(address(lockContract), _amount);
         lockContract.lock(_forUser, _amount, _lockTokenBlockNumber);
@@ -235,9 +235,9 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         // _requireCallerIsBorrowerOperations();
         uint tokenRewardPerLockTokenStaked;
         require(!tokens[tokenAddress], "TokenAddress not supported!");
-        
+        totalLockTokenAmount = lockContract.totalTokenAmount();
         if (totalLockTokenAmount > 0) {
-        	tokenRewardPerLockTokenStaked = _reward.mul(DECIMAL_PRECISION).div(totalLockTokenAmount);
+            tokenRewardPerLockTokenStaked = _reward.mul(DECIMAL_PRECISION).div(totalLockTokenAmount);
         }
         
         tokensRewards[tokenAddress] = tokensRewards[tokenAddress].add(tokenRewardPerLockTokenStaked);
@@ -262,7 +262,9 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
 
     function _getPendingRewardTokenGain( IERC20 _token, address _user) internal view returns (uint) {
         uint tokenSnapshot = userTokenSnapshots[_user][_token];
-        uint tokenReward = stakes[_user].mul(tokensRewards[_token].sub(tokenSnapshot)).div(DECIMAL_PRECISION);
+        (uint currentStake,) = lockContract.getUserAllStakedToken(msg.sender);
+         _requireUserHasStake(currentStake);
+        uint tokenReward = currentStake.mul(tokensRewards[_token].sub(tokenSnapshot)).div(DECIMAL_PRECISION);
         return tokenReward;
     }
 

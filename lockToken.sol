@@ -321,7 +321,7 @@ contract LockToken is ERC20, Ownable{
         bool unlocked;
     }
     
-        
+    uint256 public minimumLockAmount;
     // How much LockToken will get when staking 1 token without lock
     uint256 public stakeTokenRatio = 1000;
     // user token amount for staking without lock
@@ -373,11 +373,14 @@ contract LockToken is ERC20, Ownable{
 
         lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
     }
+    function setMinimumLockQuantity(uint256 _minimumLockAmount) public onlyOwner {
+        minimumLockAmount = _minimumLockAmount;
+    }
         
     // lock token for LockToken
     function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) public onlyAdmin returns (uint256 _id) {
         require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
-     //   require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
+        require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
         
         //token.safeApprove(address(this), _amount);
@@ -445,6 +448,7 @@ contract LockToken is ERC20, Ownable{
     // stake token for LockToken without lock
     function stake(address _forUser, uint256 _tokenAmount) public onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: stake not supported");
+        require(_tokenAmount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
         //token.safeApprove(address(this), _tokenAmount);
         token.safeTransferFrom(msg.sender, address(this),_tokenAmount);
