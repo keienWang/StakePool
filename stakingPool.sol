@@ -35,7 +35,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     
     // the total rewards of tokens
     mapping(IERC20 => uint256) tokensRewards; 
-    mapping(IERC20 => bool) tokens;
+    mapping(IERC20 => bool)public  tokens;
     
     // all the tokens being reward
     IERC20[] public rewardTokens;
@@ -114,7 +114,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         require(_amount >= minimumLockAmount, 'StakingPool : token amount must be greater than minimumLockAmount');
         harvestAll(_forUser);
         token.safeTransferFrom(msg.sender, address(this), _amount);
-        token.safeApprove(address(lockContract), _amount);
+        token.safeIncreaseAllowance(address(lockContract), _amount);
         lockContract.lock(_forUser, _amount, _lockTokenBlockNumber);
     }
 
@@ -127,13 +127,13 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     function emergencyUnlock(address _forUser, uint256 _lockRecordId) public{
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
         (, uint256 _userLockTokenAmount) = lockContract.getUserAllStakedToken(_forUser);
-        _requireUserHasStake(_userLockTokenAmount);
-        (,,uint256 _lockTokenAmount,,,) = lockContract.getLockRecord(_lockRecordId);
-        lockToken.safeTransferFrom(msg.sender, address(this), _lockTokenAmount);
-        
-        lockToken.safeApprove(address(lockContract), _lockTokenAmount);
-        lockContract.unlock(_forUser,_lockRecordId);
-        emit EmergencyUnlock(_forUser, _lockRecordId);
+        if (_requireUserHasStake(_userLockTokenAmount)){
+            (,,uint256 _lockTokenAmount,,,) = lockContract.getLockRecord(_lockRecordId);
+            lockToken.safeTransferFrom(msg.sender, address(this), _lockTokenAmount);
+            lockContract.unlock(_forUser,_lockRecordId);
+            emit EmergencyUnlock(_forUser, _lockRecordId);
+        }
+       
     }
     
     function stake(address _forUser, uint256 _tokenAmount) public started notStopped {
@@ -141,8 +141,8 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         _requireNonZeroAmount(_tokenAmount);
         require(_tokenAmount >= minimumLockAmount, 'StakingPool :  token amount must be greater than minimumLockAmount');
         harvestAll(_forUser);
-        require(token.transferFrom(msg.sender, address(this), _tokenAmount), "not support!");
-        token.safeApprove(address(lockContract), _tokenAmount);
+        token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
+        token.safeIncreaseAllowance(address(lockContract), _tokenAmount);
         lockContract.stake(_forUser, _tokenAmount);
     }
     
@@ -156,7 +156,6 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         require(msg.sender != address(0), 'StakingPool: _forUser can not be Zero');
         require(_tokenAmount >= 0, 'StakingPool: token amount must be greater than Zero');
         lockToken.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-        lockToken.safeApprove(address(lockContract), _tokenAmount);
         lockContract.unstake(_forUser, _tokenAmount);
         emit EmergencyUnstake(_forUser, _tokenAmount);
     }
@@ -166,11 +165,13 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         require(address(_rewardToken) != address(0), 'StakingPool: _rewardToken can not be Zero');
         require(tokens[_rewardToken], "StakingPool: not support!");
         (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(msg.sender);
-        _requireUserHasStake(_lockTokenAmount);
-        uint256 reward = _pendingReward(_rewardToken, msg.sender);
-        _rewardToken.safeTransfer(msg.sender, reward);
-        emit Harvest(msg.sender, _rewardToken, reward);
-        _updateUserSnapshot(msg.sender, _rewardToken);
+        if (_requireUserHasStake(_lockTokenAmount)){
+            uint256 reward = _pendingReward(_rewardToken, msg.sender);
+            _rewardToken.safeTransfer(msg.sender, reward);
+            emit Harvest(msg.sender, _rewardToken, reward);
+            _updateUserSnapshot(msg.sender, _rewardToken);
+        }
+        
     }
     
     function harvestAll(address _forUser) public {
@@ -183,7 +184,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     function increaseTokenReward(IERC20 _token, uint256 _reward) external notStopped started onlyOwner{
         // _requireCallerIsBorrowerOperations();
         uint256 tokenRewardPerLockTokenStaked;
-        require(!tokens[_token], "StakingPool : _token not supported!");
+        require(tokens[_token], "StakingPool : _token not supported!");
         if (lockContract.totalLockTokenAmount() > 0) {
             tokenRewardPerLockTokenStaked = _reward.mul(DECIMAL_PRECISION).div(lockContract.totalLockTokenAmount());
         }
@@ -199,8 +200,11 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     function _pendingReward( IERC20 _token, address _user) internal view returns (uint256) {
         uint256 tokenSnapshot = userTokenSnapshots[_user][_token];
         (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(msg.sender);
-         _requireUserHasStake(_lockTokenAmount);
-        return _lockTokenAmount.mul(tokensRewards[_token].sub(tokenSnapshot)).div(DECIMAL_PRECISION);
+         if (_requireUserHasStake(_lockTokenAmount)){
+             return _lockTokenAmount.mul(tokensRewards[_token].sub(tokenSnapshot)).div(DECIMAL_PRECISION);
+         }else{
+             return 0;
+         }
     }
 
     function _updateUserSnapshot(address _user, IERC20 _rewardToken)internal{
@@ -253,11 +257,16 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         stopped = true;
     }
     
-    function _requireUserHasStake(uint256 _currentStake) internal pure {  
-        require(_currentStake > 0, 'StakingPool : User must have a non-zero stake');  
+    function _requireUserHasStake(uint256 _currentStake) internal pure returns(bool) {  
+         if (_currentStake > 0) {
+            return true;
+        }else{
+            return false;
+        }
     }
 
     function _requireNonZeroAmount(uint256 _amount) internal pure {
+      
         require(_amount > 0, 'StakingPool : Amount must be non-zero');
     }
 
