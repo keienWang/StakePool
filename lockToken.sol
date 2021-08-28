@@ -440,7 +440,8 @@ contract LockToken is ERC20, Ownable{
                     userLockRecordIds[lockRecords[_lockRecordId].user][i] = userLockRecordIds[lockRecords[_lockRecordId].user][i + 1];
                 }
                 // TODO require?
-                //userLockRecordIds[lockRecords[_lockRecordId].user].length - 1;
+                // userLockRecordIds[lockRecords[_lockRecordId].user].length--;
+                userLockRecordIds[lockRecords[_lockRecordId].user].pop();
                 break;
             }
         }

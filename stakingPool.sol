@@ -227,7 +227,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
                 for ( uint256 j = i; j < rewardTokens.length - 1; j++) {
                     rewardTokens[j] = rewardTokens[j + 1];
                 }
-                rewardTokens.length - 1;
+                rewardTokens.pop();
                 break;
             }
         }
