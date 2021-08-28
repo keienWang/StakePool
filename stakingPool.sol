@@ -71,8 +71,12 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         _;
     }
     
-    constructor(){
-        startBlock = block.number;
+    constructor(uint256 _startBlock){
+        startBlock = _startBlock;
+    }
+    
+    function setStartBlock(uint256 _startBlock)external onlyOwner{
+        startBlock = _startBlock;
     }
     
     function setAddresses
@@ -216,6 +220,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     
     function _delRewardToken(IERC20 _delToken)external onlyOwner {
         require(address(_delToken) != address(0), "StakingPool : Account cannot be zero address");
+        require(tokensRewards[_delToken] == 0,"StakingPool : this token have rewards!");
         tokens[_delToken] = false;
         for (uint256 i = 1; i < rewardTokens.length; i++){
             if (rewardTokens[i] == _delToken){
