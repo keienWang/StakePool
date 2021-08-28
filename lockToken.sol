@@ -433,12 +433,14 @@ contract LockToken is ERC20, Ownable{
         //remove this id from user lock record ids
         uint256 i;
         uint256 j;
+        //TODO error?
         for (j = 0; j < userLockRecordIds[lockRecords[_lockRecordId].user].length; j++) {
             if (userLockRecordIds[lockRecords[_lockRecordId].user][j] == _lockRecordId) {
                 for (i = j; i < userLockRecordIds[lockRecords[_lockRecordId].user].length - 1; i++) {
                     userLockRecordIds[lockRecords[_lockRecordId].user][i] = userLockRecordIds[lockRecords[_lockRecordId].user][i + 1];
                 }
-                userLockRecordIds[lockRecords[_lockRecordId].user].length - 1;
+                // TODO require?
+                //userLockRecordIds[lockRecords[_lockRecordId].user].length - 1;
                 break;
             }
         }
@@ -500,7 +502,8 @@ contract LockToken is ERC20, Ownable{
     function getLockRecord(uint256 _id) view public returns (address _user, uint256 _tokenAmount, 
         uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked)
     {
-        return (lockRecords[_id].user, lockRecords[_id].tokenAmount, lockRecords[_id].lockTokenAmount,
-        lockRecords[_id].lockBlockNumber, lockRecords[_id].unlockBlockNumber, lockRecords[_id].unlocked);
+        LockRecord memory lockRecord = lockRecords[_id];
+        return (lockRecord.user, lockRecord.tokenAmount, lockRecord.lockTokenAmount,
+        lockRecord.lockBlockNumber, lockRecord.unlockBlockNumber, lockRecord.unlocked);
     }
 }
