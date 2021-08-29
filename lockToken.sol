@@ -300,8 +300,6 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     }
 }
 
-
-
 contract LockToken is ERC20, Ownable{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -352,11 +350,12 @@ contract LockToken is ERC20, Ownable{
             
     event Unstake(address User, uint256 TokenAmount, uint256 LockTokenAmount);
 
-    constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio) ERC20 (_name, _symbol) {
+    constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio, uint256 _minimumLockAmount) ERC20 (_name, _symbol) {
         token = _token;
         admins[msg.sender] = true;
         stakeTokenRatio = _stakeTokenRatio;
         checkAdmin = true;
+        minimumLockAmount = _minimumLockAmount;
     }
     
     function setAdmin(address _account, bool _isAdmin) external onlyOwner {
@@ -496,5 +495,20 @@ contract LockToken is ERC20, Ownable{
         LockRecord memory lockRecord = lockRecords[_id];
         return (lockRecord.user, lockRecord.tokenAmount, lockRecord.lockTokenAmount,
         lockRecord.lockBlockNumber, lockRecord.unlockBlockNumber, lockRecord.unlocked);
+    }
+    
+    function getUserLockRecordLength(address _user) view external returns (uint256 _length)
+    {
+        return userLockRecordIds[_user].length;
+    }
+    
+    function getUserLockRecord(address _user, uint256 _userLockRecordIdsId) view external returns (uint256 _tokenAmount, 
+        uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked)
+    {
+        uint256[] memory userLockRecordIdArray = userLockRecordIds[_user];
+        require(userLockRecordIdArray.length > _userLockRecordIdsId, 'LockToken: _userLockRecordIdsId must be less than length');
+        LockRecord memory lockRecord = lockRecords[userLockRecordIdArray[_userLockRecordIdsId]];
+        return (lockRecord.tokenAmount, lockRecord.lockTokenAmount, lockRecord.lockBlockNumber, 
+        lockRecord.unlockBlockNumber, lockRecord.unlocked);
     }
 }
