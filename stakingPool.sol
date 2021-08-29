@@ -34,13 +34,13 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     uint256 public minimumLockAmount;
     
     // the total rewards of tokens
-    mapping(IERC20 => uint256) tokensRewards; 
-    mapping(IERC20 => bool)public  tokens;
+    mapping(IERC20 => uint256) public totalRewards; 
+    mapping(IERC20 => bool) public tokens;
     
     // all the tokens being reward
     IERC20[] public rewardTokens;
-    mapping(address => mapping (uint256 => bool)) userLockId;
-    mapping(address => mapping(IERC20 => uint256)) userTokenSnapshots;
+    mapping(address => mapping (uint256 => bool)) public userLockId;
+    mapping(address => mapping(IERC20 => uint256)) public userTokenSnapshots;
 
     // --- Events ---
     event LockTokenSet(IERC20 _lockToken);
@@ -71,8 +71,9 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         _;
     }
     
-    constructor(uint256 _startBlock){
+    constructor(uint256 _startBlock, uint256 _minimumLockAmount){
         startBlock = _startBlock;
+        minimumLockAmount = _minimumLockAmount;
     }
     
     function setStartBlock(uint256 _startBlock)external onlyOwner{
@@ -188,8 +189,8 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         if (lockContract.totalLockTokenAmount() > 0) {
             tokenRewardPerLockTokenStaked = _reward.mul(DECIMAL_PRECISION).div(lockContract.totalLockTokenAmount());
         }
-        tokensRewards[_token] = tokensRewards[_token].add(tokenRewardPerLockTokenStaked);
-        emit RewardUpdated(_token, tokensRewards[_token]);
+        totalRewards[_token] = totalRewards[_token].add(tokenRewardPerLockTokenStaked);
+        emit RewardUpdated(_token, totalRewards[_token]);
     }
 
     // --- Pending reward functions ---
@@ -201,7 +202,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         uint256 tokenSnapshot = userTokenSnapshots[_user][_token];
         (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(msg.sender);
          if (_requireUserHasStake(_lockTokenAmount)){
-             return _lockTokenAmount.mul(tokensRewards[_token].sub(tokenSnapshot)).div(DECIMAL_PRECISION);
+             return _lockTokenAmount.mul(totalRewards[_token].sub(tokenSnapshot)).div(DECIMAL_PRECISION);
          }else{
              return 0;
          }
@@ -209,8 +210,8 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
 
     function _updateUserSnapshot(address _user, IERC20 _rewardToken)internal{
          if (address(_rewardToken) != address(0)){
-            userTokenSnapshots[_user][_rewardToken] = tokensRewards[_rewardToken];
-            emit StakerSnapshotsUpdated(_user, _rewardToken, tokensRewards[_rewardToken]);
+            userTokenSnapshots[_user][_rewardToken] = totalRewards[_rewardToken];
+            emit StakerSnapshotsUpdated(_user, _rewardToken, totalRewards[_rewardToken]);
         }
     }
 
@@ -224,7 +225,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     
     function _delRewardToken(IERC20 _delToken)external onlyOwner {
         require(address(_delToken) != address(0), "StakingPool : Account cannot be zero address");
-        require(tokensRewards[_delToken] == 0,"StakingPool : this token have rewards!");
+        require(totalRewards[_delToken] == 0,"StakingPool : this token have rewards!");
         tokens[_delToken] = false;
         for (uint256 i = 1; i < rewardTokens.length; i++){
             if (rewardTokens[i] == _delToken){
@@ -266,8 +267,6 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     }
 
     function _requireNonZeroAmount(uint256 _amount) internal pure {
-      
         require(_amount > 0, 'StakingPool : Amount must be non-zero');
     }
-
 }
