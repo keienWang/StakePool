@@ -165,12 +165,12 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         require(address(_rewardToken) != address(0), 'StakingPool: _rewardToken can not be Zero');
         require(tokens[_rewardToken], "StakingPool: not support!");
-        (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(msg.sender);
+        (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(_forUser);
         if (_requireUserHasStake(_lockTokenAmount)){
-            uint256 reward = _pendingReward(_rewardToken, msg.sender);
-            _rewardToken.safeTransfer(msg.sender, reward);
-            emit Harvest(msg.sender, _rewardToken, reward);
-            _updateUserSnapshot(msg.sender, _rewardToken);
+            uint256 reward = _pendingReward(_rewardToken, _forUser);
+            _rewardToken.safeTransfer(_forUser, reward);
+            emit Harvest(_forUser, _rewardToken, reward);
+            _updateUserSnapshot(_forUser, _rewardToken);
         }
         
     }
