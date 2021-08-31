@@ -70,7 +70,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         _;
     }
 
-    constructor(uint256 _startBlock, uint256 _minimumLockAmount) external {
+    constructor(uint256 _startBlock, uint256 _minimumLockAmount)  {
         startBlock = _startBlock;
         minimumLockAmount = _minimumLockAmount;
     }
@@ -138,7 +138,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
 
     function stake(address _forUser, uint256 _amount) external started notStopped {
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
-        _requireNonZeroAmount(_tokenAmount);
+        _requireNonZeroAmount(_amount);
         // require(_tokenAmount >= minimumLockAmount, 'StakingPool :  token amount must be greater than minimumLockAmount');
         harvestAll(_forUser);
         token.safeTransferFrom(msg.sender, address(this), _amount);
@@ -154,11 +154,11 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     function emergencyUnstake(address _forUser, uint256 _amount) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         //require(msg.sender != address(0), 'StakingPool: _forUser can not be Zero');
-        require(_tokenAmount >= 0, 'StakingPool: token amount must be greater than Zero');
-        lockToken.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-        lockToken.safeIncreaseAllowance(address(lockToken), _tokenAmount);
-        lockContract.unstake(_forUser, _tokenAmount);
-        emit EmergencyUnstake(_forUser, _tokenAmount);
+        require(_amount >= 0, 'StakingPool: token amount must be greater than Zero');
+        lockToken.safeTransferFrom(msg.sender, address(this), _amount);
+        lockToken.safeIncreaseAllowance(address(lockToken), _amount);
+        lockContract.unstake(_forUser, _amount);
+        emit EmergencyUnstake(_forUser, _amount);
 
     }
 
