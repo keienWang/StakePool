@@ -303,11 +303,11 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 contract LockToken is ERC20, Ownable{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-    
+
     IERC20 public token;
     mapping(uint256 => uint256) public lockTokenBlockNumberAndRatios;
     uint256 constant denominator = 1000;
-    
+
     struct LockRecord {
         address user;
         uint256 tokenAmount;
@@ -316,22 +316,22 @@ contract LockToken is ERC20, Ownable{
         uint256 unlockBlockNumber;
         bool unlocked;
     }
-    
+
     uint256 public minimumLockAmount;
     // How much LockToken will get when staking 1 token without lock
     uint256 public stakeTokenRatio = 1000;
     // user token amount for staking without lock
     mapping(address => uint256) public userStakedToken;
-    
+
     uint256 public totalTokenAmount;
     uint256 public totalLockTokenAmount;
-    
+
     uint256 public currentLockId;
     uint256[] public allLockIds;
-    
+
     mapping(address => uint256[]) public userLockRecordIds;
     mapping(uint256 => LockRecord) public lockRecords;
-    
+
     // Total staked token balance including staked and locked
     mapping(address => uint256) public userTokenAmount;
     // Total LockToken balance including staked and locked
@@ -341,11 +341,11 @@ contract LockToken is ERC20, Ownable{
     bool checkAdmin;
     modifier onlyAdmin virtual {
         if (checkAdmin){
-            require(admins[msg.sender] || msg.sender == owner()); 
+            require(admins[msg.sender] || msg.sender == owner());
         }
         _;
     }
-    
+
     event Lock(address User, address ForUser, uint256 TokenAmount, uint256 LockTokenAmount, uint256 LockedBlockNumber);
     event Unlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount);
     event Unstake(address User, uint256 TokenAmount, uint256 LockTokenAmount);
@@ -357,16 +357,16 @@ contract LockToken is ERC20, Ownable{
         checkAdmin = true;
         minimumLockAmount = _minimumLockAmount;
     }
-    
+
     function setAdmin(address _account, bool _isAdmin) external onlyOwner {
         require(_account != address(0), "LockToken: _account must not be 0");
         admins[_account] = _isAdmin;
     }
-    
+
     function setCheckAdmin(bool _checkAdmin) external onlyOwner{
         checkAdmin = _checkAdmin;
     }
-    
+
     function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _lockTokenRatio) external onlyAdmin {
         require(_lockTokenBlockNumber > 0, "LockToken: _lockTokenBlockNumber must be greater than 0");
         require(_lockTokenRatio > 0, "LockToken: _lockTokenRatio must be greater than 0");
@@ -375,13 +375,13 @@ contract LockToken is ERC20, Ownable{
     function setMinimumLockQuantity(uint256 _minimumLockAmount) external onlyOwner {
         minimumLockAmount = _minimumLockAmount;
     }
-        
+
     // lock token for LockToken
     function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external onlyAdmin returns (uint256 _id) {
         require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
         require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
-        
+
         //token.safeApprove(address(this), _amount);
         token.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 unlockBlock = block.number.add(_lockTokenBlockNumber);
@@ -412,7 +412,8 @@ contract LockToken is ERC20, Ownable{
         require(_balances[msg.sender] >= lockRecords[_lockRecordId].lockTokenAmount, "LockToken: LockToken balance is not enough!");
         token.safeTransfer(_forUser, lockRecords[_lockRecordId].tokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].sub(lockRecords[_lockRecordId].lockTokenAmount);
-        _burn(msg.sender, lockRecords[_lockRecordId].lockTokenAmount);
+        transferFrom(msg.sender,address(this), lockRecords[_lockRecordId].lockTokenAmount);
+        _burn(address(this), lockRecords[_lockRecordId].lockTokenAmount);
 
         lockRecords[_lockRecordId].unlocked = true;
 
@@ -439,17 +440,18 @@ contract LockToken is ERC20, Ownable{
     // stake token for LockToken without lock
     function stake(address _forUser, uint256 _tokenAmount) external onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: stake not supported");
-        require(_tokenAmount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
+        // require(_tokenAmount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
+        require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
         //token.safeApprove(address(this), _tokenAmount);
         token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-        
+
         uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-        
+
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_tokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].add(_tokenAmount);
         _mint(_forUser, lockTokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].add(lockTokenAmount);
-        
+
         totalTokenAmount = totalTokenAmount.add(_tokenAmount);
         totalLockTokenAmount = totalLockTokenAmount.add(lockTokenAmount);
         emit Lock(msg.sender, _forUser, _tokenAmount, lockTokenAmount, 0);
@@ -459,24 +461,25 @@ contract LockToken is ERC20, Ownable{
     function unstake(address _forUser, uint256 _tokenAmount) external onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: unstake not supported");
         require(userStakedToken[_forUser] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
-        
+
         uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-        
+
         require(_balances[msg.sender] >= lockTokenAmount, "LockToken: LockToken balance is not enough!");
-        
-        _burn(msg.sender, lockTokenAmount);
+
+        transferFrom(msg.sender, address(this), lockTokenAmount);
+        _burn(address(this), lockTokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].sub(_tokenAmount);
-            
+
         userTokenAmount[_forUser] = userTokenAmount[_forUser].sub(_tokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].sub(lockTokenAmount);
-                        
+
         totalLockTokenAmount = totalLockTokenAmount.sub(lockTokenAmount);
         totalTokenAmount = totalTokenAmount.sub(_tokenAmount);
-        
+
         token.safeTransfer(_forUser, _tokenAmount);
         emit Unstake(_forUser, _tokenAmount, lockTokenAmount);
     }
-        
+
     // get user's all staked token amount including lock and stake
     function getUserAllStakedToken(address _user) external view returns (uint256 _tokenAmount, uint256 _lockTokenAmount)
     {
@@ -488,26 +491,26 @@ contract LockToken is ERC20, Ownable{
         return userLockRecordIds[_user];
     }
 
-    function getLockRecord(uint256 _id) view external returns (address _user, uint256 _tokenAmount, 
+    function getLockRecord(uint256 _id) view external returns (address _user, uint256 _tokenAmount,
         uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked)
     {
         LockRecord memory lockRecord = lockRecords[_id];
         return (lockRecord.user, lockRecord.tokenAmount, lockRecord.lockTokenAmount,
         lockRecord.lockBlockNumber, lockRecord.unlockBlockNumber, lockRecord.unlocked);
     }
-    
+
     function getUserLockRecordLength(address _user) view external returns (uint256 _length)
     {
         return userLockRecordIds[_user].length;
     }
-    
-    function getUserLockRecord(address _user, uint256 _userLockRecordIdsId) view external returns (uint256 _tokenAmount, 
+
+    function getUserLockRecord(address _user, uint256 _userLockRecordIdsId) view external returns (uint256 _tokenAmount,
         uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked)
     {
         uint256[] memory userLockRecordIdArray = userLockRecordIds[_user];
         require(userLockRecordIdArray.length > _userLockRecordIdsId, 'LockToken: _userLockRecordIdsId must be less than length');
         LockRecord memory lockRecord = lockRecords[userLockRecordIdArray[_userLockRecordIdsId]];
-        return (lockRecord.tokenAmount, lockRecord.lockTokenAmount, lockRecord.lockBlockNumber, 
+        return (lockRecord.tokenAmount, lockRecord.lockTokenAmount, lockRecord.lockBlockNumber,
         lockRecord.unlockBlockNumber, lockRecord.unlocked);
     }
 }
