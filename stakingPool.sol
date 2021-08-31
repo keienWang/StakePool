@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 import "./lib.sol";
 
-interface LockToken{
+interface LockToken {
     struct LockRecord {
         address user;
         uint256 tokenAmount;
@@ -21,12 +21,10 @@ interface LockToken{
     function unstake(address _forUser, uint256 _tokenAmount) external;
 }
 
-
 contract StakingPool is Ownable, CheckContract, BaseMath {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-
-    uint8 public constant ZERO = 0;
+    
     IERC20 public token;
     IERC20 public lockToken;
     LockToken public lockContract;
@@ -48,7 +46,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     event LockContractSet(LockToken _lockToken);
     event StakeChanged(address indexed _staker, uint256 _newStake);
     event Harvest(address indexed _staker, IERC20 _tokenAddress, uint256 _tokenGain);
-    event RewardUpdated(IERC20 _rewardtokenAddress, uint256 _F_Token);
+    event RewardUpdated(IERC20 _rewardtokenAddress, uint256 _reward, uint256 _tokenReward, uint256 addedTokenRewardPerLockToken);
     event totalLockTokenUpdated(uint256 _totalLockToken);
     event StakerSnapshotsUpdated(address _staker, IERC20 _token, uint256 _reward);
     event EmergencyStop(address indexed _user, address _to);
@@ -57,7 +55,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         
     bool stopped;
     modifier notStopped virtual {
-            require(!stopped,"StakingPool : this pool is stopped!"); 
+        require(!stopped,"StakingPool : this pool is stopped!"); 
         _;
     }
     
@@ -71,12 +69,12 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         _;
     }
     
-    constructor(uint256 _startBlock, uint256 _minimumLockAmount){
+    constructor(uint256 _startBlock, uint256 _minimumLockAmount) external {
         startBlock = _startBlock;
         minimumLockAmount = _minimumLockAmount;
     }
     
-    function setStartBlock(uint256 _startBlock)external onlyOwner{
+    function setStartBlock(uint256 _startBlock) external onlyOwner{
         startBlock = _startBlock;
     }
     
@@ -105,7 +103,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         admins[_account] = _isAdmin;
     }
     
-    function setMinimumLockQuantity(uint256 _minimumLockAmount) public onlyOwner {
+    function setMinimumLockQuantity(uint256 _minimumLockAmount) external onlyOwner {
         minimumLockAmount = _minimumLockAmount;
     }
 
@@ -120,51 +118,50 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     }
 
     // If requested amount > stake, send their entire stake.
-    function unlock(address _forUser, uint256 _lockRecordId) external  {
+    function unlock(address _forUser, uint256 _lockRecordId) external {
         harvestAll(_forUser);
         emergencyUnlock(_forUser, _lockRecordId);
     }
     
-    function emergencyUnlock(address _forUser, uint256 _lockRecordId) public{
+    function emergencyUnlock(address _forUser, uint256 _lockRecordId) public {
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
         (, uint256 _userLockTokenAmount) = lockContract.getUserAllStakedToken(_forUser);
         if (_requireUserHasStake(_userLockTokenAmount)){
             (,,uint256 _lockTokenAmount,,,) = lockContract.getLockRecord(_lockRecordId);
             lockToken.safeTransferFrom(msg.sender, address(this), _lockTokenAmount);
-            lockContract.unlock(_forUser,_lockRecordId);
+            lockContract.unlock(_forUser, _lockRecordId);
             emit EmergencyUnlock(_forUser, _lockRecordId);
         }
-       
     }
     
-    function stake(address _forUser, uint256 _tokenAmount) public started notStopped {
+    function stake(address _forUser, uint256 _amount) external started notStopped {
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
         _requireNonZeroAmount(_tokenAmount);
-        require(_tokenAmount >= minimumLockAmount, 'StakingPool :  token amount must be greater than minimumLockAmount');
+        require(_amount >= minimumLockAmount, 'StakingPool :  token amount must be greater than minimumLockAmount');
         harvestAll(_forUser);
-        token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-        token.safeIncreaseAllowance(address(lockContract), _tokenAmount);
-        lockContract.stake(_forUser, _tokenAmount);
+        token.safeTransferFrom(msg.sender, address(this), _amount);
+        token.safeIncreaseAllowance(address(lockContract), _amount);
+        lockContract.stake(_forUser, _amount);
     }
     
-    function unstake(address _forUser, uint256 _tokenAmount) public  {
+    function unstake(address _forUser, uint256 _amount) external {
         harvestAll(_forUser);
-        emergencyUnstake(_forUser, _tokenAmount);
+        emergencyUnstake(_forUser, _amount);
     }
     
-    function emergencyUnstake(address _forUser, uint256 _tokenAmount)public {
+    function emergencyUnstake(address _forUser, uint256 _amount) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
-        require(msg.sender != address(0), 'StakingPool: _forUser can not be Zero');
+        //require(msg.sender != address(0), 'StakingPool: _forUser can not be Zero');
         require(_tokenAmount >= 0, 'StakingPool: token amount must be greater than Zero');
-        lockToken.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-        lockContract.unstake(_forUser, _tokenAmount);
-        emit EmergencyUnstake(_forUser, _tokenAmount);
+        lockToken.safeTransferFrom(msg.sender, address(this), _amount);
+        lockContract.unstake(_forUser, _amount);
+        emit EmergencyUnstake(_forUser, _amount);
     }
     
     function harvest(address _forUser, IERC20 _rewardToken) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         require(address(_rewardToken) != address(0), 'StakingPool: _rewardToken can not be Zero');
-        require(tokens[_rewardToken], "StakingPool: not support!");
+        require(tokens[_rewardToken], "StakingPool: _rewardToken not support!");
         (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(_forUser);
         if (_requireUserHasStake(_lockTokenAmount)){
             uint256 reward = _pendingReward(_rewardToken, _forUser);
@@ -172,7 +169,6 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
             emit Harvest(_forUser, _rewardToken, reward);
             _updateUserSnapshot(_forUser, _rewardToken);
         }
-        
     }
     
     function harvestAll(address _forUser) public {
@@ -183,22 +179,26 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     }
 
     function increaseTokenReward(IERC20 _token, uint256 _reward) external notStopped started onlyOwner{
+        require(address(_token) != address(0), 'StakingPool: _token can not be Zero');
         // _requireCallerIsBorrowerOperations();
-        uint256 tokenRewardPerLockTokenStaked;
+        _requireNonZeroAmount(_reward);
         require(tokens[_token], "StakingPool : _token not supported!");
+        uint256 addedTokenRewardPerLockToken = 0;
         if (lockContract.totalLockTokenAmount() > 0) {
-            tokenRewardPerLockTokenStaked = _reward.mul(DECIMAL_PRECISION).div(lockContract.totalLockTokenAmount());
+            addedTokenRewardPerLockToken = _reward.mul(DECIMAL_PRECISION).div(lockContract.totalLockTokenAmount());
+            totalRewards[_token] = totalRewards[_token].add(addedTokenRewardPerLockToken);
         }
-        totalRewards[_token] = totalRewards[_token].add(tokenRewardPerLockTokenStaked);
-        emit RewardUpdated(_token, totalRewards[_token]);
+        emit RewardUpdated(_token, _reward, totalRewards[_token], addedTokenRewardPerLockToken);
     }
 
     // --- Pending reward functions ---
-    function pendingReward(IERC20 _token ,address _user) external view  returns (uint256) {
+    function pendingReward(IERC20 _token, address _user) external view returns (uint256) {
         return _pendingReward(_token, _user);
     }
 
-    function _pendingReward( IERC20 _token, address _user) internal view returns (uint256) {
+    function _pendingReward(IERC20 _token, address _user) internal view returns (uint256) {
+        require(address(_token) != address(0), 'StakingPool: _token can not be Zero');
+        require(address(_user) != address(0), 'StakingPool: _user can not be Zero');
         uint256 tokenSnapshot = userTokenSnapshots[_user][_token];
         (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(msg.sender);
          if (_requireUserHasStake(_lockTokenAmount)){
@@ -208,28 +208,28 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
          }
     }
 
-    function _updateUserSnapshot(address _user, IERC20 _rewardToken)internal{
-         if (address(_rewardToken) != address(0)){
+    function _updateUserSnapshot(address _user, IERC20 _rewardToken) internal {
+        if (address(_user) != address(0) && address(_rewardToken) != address(0)){
             userTokenSnapshots[_user][_rewardToken] = totalRewards[_rewardToken];
             emit StakerSnapshotsUpdated(_user, _rewardToken, totalRewards[_rewardToken]);
         }
     }
 
     // --- Account auth functions ---
-    function _addRewardToken(IERC20 _newToken)external onlyOwner {
-        require(!tokens[_newToken],"StakingPool : Token is existing!");
-        require(address(_newToken) != address(0), "StakingPool : Account cannot be zero address");
+    function addRewardToken(IERC20 _newToken) external onlyOwner {
+        require(!tokens[_newToken], "StakingPool : Token is existing!");
+        require(address(_newToken) != address(0), "StakingPool : _newToken cannot be zero address");
         rewardTokens.push(_newToken);
         tokens[_newToken] = true;
     }
     
-    function _delRewardToken(IERC20 _delToken)external onlyOwner {
-        require(address(_delToken) != address(0), "StakingPool : Account cannot be zero address");
-        require(totalRewards[_delToken] == 0,"StakingPool : this token have rewards!");
+    function delRewardToken(IERC20 _delToken) external onlyOwner {
+        require(address(_delToken) != address(0), "StakingPool : _delToken cannot be zero address");
+        require(totalRewards[_delToken] == 0, "StakingPool : this token have rewards!");
         tokens[_delToken] = false;
         for (uint256 i = 1; i < rewardTokens.length; i++){
             if (rewardTokens[i] == _delToken){
-                for ( uint256 j = i; j < rewardTokens.length - 1; j++) {
+                for (uint256 j = i; j < rewardTokens.length - 1; j++) {
                     rewardTokens[j] = rewardTokens[j + 1];
                 }
                 rewardTokens.pop();
@@ -243,9 +243,9 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
             _to = msg.sender;
         }
          for (uint256 i = 0; i < rewardTokens.length; i++){
-            if (address(rewardTokens[i]) != address(0)){
+            if (address(rewardTokens[i]) != address(0) && address(rewardTokens[i]) != address(token) && address(rewardTokens[i]) != address(lockToken)){
                 uint256 addrBalance = rewardTokens[i].balanceOf(address(this));
-                if (addrBalance > ZERO) {
+                if (addrBalance > 0) {
                    rewardTokens[i].safeTransfer(_to, addrBalance);
                 }  
             }
