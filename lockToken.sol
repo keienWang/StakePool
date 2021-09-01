@@ -352,10 +352,10 @@ contract LockToken is ERC20, Ownable{
 
     constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio, uint256 _minimumLockAmount) ERC20 (_name, _symbol) {
         token = _token;
-        admins[msg.sender] = true;
         stakeTokenRatio = _stakeTokenRatio;
-        checkAdmin = true;
         minimumLockAmount = _minimumLockAmount;
+        checkAdmin = true;
+        admins[msg.sender] = true;
     }
 
     function setAdmin(address _account, bool _isAdmin) external onlyOwner {
@@ -372,8 +372,18 @@ contract LockToken is ERC20, Ownable{
         require(_lockTokenRatio > 0, "LockToken: _lockTokenRatio must be greater than 0");
         lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
     }
+    
     function setMinimumLockQuantity(uint256 _minimumLockAmount) external onlyOwner {
         minimumLockAmount = _minimumLockAmount;
+    }
+    
+    function getLockTokenAmount(uint256 _amount, uint256 _lockTokenBlockNumber) public view returns (uint256 _lockTokenAmount) {
+        if(_lockTokenBlockNumber > 0){
+            _lockTokenAmount = _amount.mul(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber])
+                                .mul(decimals()).div(denominator).div(ERC20(address(token)).decimals());
+        }else{
+            _lockTokenAmount = _amount.mul(stakeTokenRatio).div(denominator);
+        }
     }
 
     // lock token for LockToken
@@ -384,7 +394,7 @@ contract LockToken is ERC20, Ownable{
         //token.safeApprove(address(this), _amount);
         token.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 unlockBlock = block.number.add(_lockTokenBlockNumber);
-        uint256 lockTokenAmount = _amount.mul(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber]).div(denominator);
+        uint256 lockTokenAmount = getLockTokenAmount(_amount, _lockTokenBlockNumber);
         //update token amount in address
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_amount);
         totalTokenAmount = totalTokenAmount.add(_amount);
@@ -438,7 +448,8 @@ contract LockToken is ERC20, Ownable{
         require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
         //token.safeApprove(address(this), _tokenAmount);
         token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-        uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
+        //uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
+        uint256 lockTokenAmount = getLockTokenAmount(_tokenAmount, 0);
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_tokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].add(_tokenAmount);
         _mint(_forUser, lockTokenAmount);
