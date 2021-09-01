@@ -23,7 +23,7 @@ interface LockToken {
     function unstake(address _forUser, uint256 _tokenAmount) external;
 }
 
-contract BAIStakingPool is Ownable, CheckContract, BaseMath {
+contract StakingPool is Ownable, CheckContract, BaseMath {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
