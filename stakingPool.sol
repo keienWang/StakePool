@@ -28,7 +28,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     event TokenSet(IERC20 _token);
     event LockContractSet(LockToken _lockToken);
     event StakeChanged(address indexed _staker, uint256 _newStake);
-    event Harvest(address indexed _staker, IERC20 _tokenAddress, uint256 _tokenGain);
+    event Harvest(address indexed _staker, IERC20 _tokenAddress, uint256 _tokenReward);
     event RewardUpdated(IERC20 _rewardtokenAddress, uint256 _reward, uint256 _tokenReward, uint256 addedTokenRewardPerLockToken);
     event totalLockTokenUpdated(uint256 _totalLockToken);
     event StakerSnapshotsUpdated(address _staker, IERC20 _token, uint256 _reward);
@@ -128,21 +128,23 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         lockContract.stake(_forUser, _amount);
     }
 
+    //unstake by token amount
     function unstake(address _forUser, uint256 _lockTokenAmount) external {
         harvestAll(_forUser);
         emergencyUnstake(_forUser, _lockTokenAmount);
     }
-
-    function emergencyUnstake(address _forUser, uint256 _lockTokenAmount) public {
+    
+    //unstake by token amount
+    function emergencyUnstake(address _forUser, uint256 _amount) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         //require(msg.sender != address(0), 'StakingPool: _forUser can not be Zero');
-        require(_lockTokenAmount >= 0, 'StakingPool: token amount must be greater than Zero');
+        require(_amount >= 0, 'StakingPool: token amount must be greater than Zero');
 
         //uint256 lockTokenAmount = _amount.mul(lockContract.stakeTokenRatio()).div(lockContract.denominator());
-        lockToken.safeTransferFrom(msg.sender, address(this), _lockTokenAmount);
-        lockToken.safeIncreaseAllowance(address(lockContract), _lockTokenAmount);
-        lockContract.unstake(_forUser, _lockTokenAmount);
-        emit EmergencyUnstake(_forUser, _lockTokenAmount);
+        lockToken.safeTransferFrom(msg.sender, address(this), _amount);
+        lockToken.safeIncreaseAllowance(address(lockContract), _amount);
+        lockContract.unstake(_forUser, _amount);
+        emit EmergencyUnstake(_forUser, _amount);
     }
 
     function harvest(address _forUser, IERC20 _rewardToken) public {
