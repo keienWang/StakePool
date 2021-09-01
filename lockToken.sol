@@ -382,7 +382,7 @@ contract LockToken is ERC20, Ownable{
             _lockTokenAmount = _amount.mul(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber])
                                 .mul(decimals()).div(denominator).div(ERC20(address(token)).decimals());
         }else{
-            _lockTokenAmount = _amount.mul(stakeTokenRatio).div(denominator);
+            _lockTokenAmount = _amount.mul(stakeTokenRatio).mul(decimals()).div(denominator).div(ERC20(address(token)).decimals());
         }
     }
 
