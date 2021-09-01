@@ -381,7 +381,6 @@ contract LockToken is ERC20, Ownable{
         require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
         require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
-
         //token.safeApprove(address(this), _amount);
         token.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 unlockBlock = block.number.add(_lockTokenBlockNumber);
@@ -401,7 +400,6 @@ contract LockToken is ERC20, Ownable{
         userLockRecordIds[_forUser].push(_id);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].add(lockTokenAmount);
         _mint(_forUser, lockTokenAmount);
-
         emit Lock(msg.sender, _forUser, _amount, lockTokenAmount, _lockTokenBlockNumber);
     }
 
@@ -410,18 +408,14 @@ contract LockToken is ERC20, Ownable{
         require(_forUser == lockRecords[_lockRecordId].user, 'LockToken: only can be unlocked for user himself');
         require(!lockRecords[_lockRecordId].unlocked, 'LockToken: Tokens has already been unlocked');
         require(_balances[msg.sender] >= lockRecords[_lockRecordId].lockTokenAmount, "LockToken: LockToken balance is not enough!");
-        token.safeTransfer(_forUser, lockRecords[_lockRecordId].tokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].sub(lockRecords[_lockRecordId].lockTokenAmount);
-        transferFrom(msg.sender,address(this), lockRecords[_lockRecordId].lockTokenAmount);
-        _burn(address(this), lockRecords[_lockRecordId].lockTokenAmount);
-
+        _burn(msg.sender, lockRecords[_lockRecordId].lockTokenAmount);
         lockRecords[_lockRecordId].unlocked = true;
-
         //update token amount in address
         userTokenAmount[_forUser] = userTokenAmount[_forUser].sub(lockRecords[_lockRecordId].tokenAmount);
         totalLockTokenAmount = totalLockTokenAmount.sub(lockRecords[_lockRecordId].lockTokenAmount);
         totalTokenAmount = totalTokenAmount.sub(lockRecords[_lockRecordId].tokenAmount);
-
+        token.safeTransfer(_forUser, lockRecords[_lockRecordId].tokenAmount);
         //remove this id from user lock record ids
         uint256 i;
         uint256 j;
@@ -444,14 +438,11 @@ contract LockToken is ERC20, Ownable{
         require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
         //token.safeApprove(address(this), _tokenAmount);
         token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-
         uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_tokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].add(_tokenAmount);
         _mint(_forUser, lockTokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].add(lockTokenAmount);
-
         totalTokenAmount = totalTokenAmount.add(_tokenAmount);
         totalLockTokenAmount = totalLockTokenAmount.add(lockTokenAmount);
         emit Lock(msg.sender, _forUser, _tokenAmount, lockTokenAmount, 0);
@@ -461,21 +452,14 @@ contract LockToken is ERC20, Ownable{
     function unstake(address _forUser, uint256 _tokenAmount) external onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: unstake not supported");
         require(userStakedToken[_forUser] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
-
         uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-
         require(_balances[msg.sender] >= lockTokenAmount, "LockToken: LockToken balance is not enough!");
-
-        transferFrom(msg.sender, address(this), lockTokenAmount);
-        _burn(address(this), lockTokenAmount);
+        _burn(msg.sender, lockTokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].sub(_tokenAmount);
-
         userTokenAmount[_forUser] = userTokenAmount[_forUser].sub(_tokenAmount);
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].sub(lockTokenAmount);
-
         totalLockTokenAmount = totalLockTokenAmount.sub(lockTokenAmount);
         totalTokenAmount = totalTokenAmount.sub(_tokenAmount);
-
         token.safeTransfer(_forUser, _tokenAmount);
         emit Unstake(_forUser, _tokenAmount, lockTokenAmount);
     }

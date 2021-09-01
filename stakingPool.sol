@@ -1,13 +1,32 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 import "./lib.sol";
-import "./lockToken.sol";
+
+interface LockToken {
+    struct LockRecord {
+        address user;
+        uint256 tokenAmount;
+        uint256 lockTokenAmount;
+        uint256 lockBlockNumber;
+        uint256 unlockBlockNumber;
+        bool unlocked;
+    }
+    function denominator()external view returns(uint256);
+    function stakeTokenRatio()external view returns(uint256);
+    function  totalLockTokenAmount()external view returns(uint256 _totalLockTokenAmount);
+    function getUserAllStakedToken(address _user) external view returns (uint256 _tokenAmount, uint256 _lockTokenAmount);
+    function getLockRecord(uint256 _id) view external returns (address _user, uint256 _tokenAmount,
+    uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
+    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external returns (uint256 _id) ;
+    function unlock(address _forUser,uint256 _lockRecordId) external;
+    function stake(address _forUser, uint256 _tokenAmount) external;
+    function unstake(address _forUser, uint256 _tokenAmount) external;
+}
 
 contract StakingPool is Ownable, CheckContract, BaseMath {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-
     IERC20 public token;
     IERC20 public lockToken;
     LockToken public lockContract;
@@ -112,7 +131,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         if (_requireUserHasStake(_userLockTokenAmount)){
             (,,uint256 _lockTokenAmount,,,) = lockContract.getLockRecord(_lockRecordId);
             lockToken.safeTransferFrom(msg.sender, address(this), _lockTokenAmount);
-            lockToken.safeIncreaseAllowance(address(lockContract), _lockTokenAmount);
+            // lockToken.safeIncreaseAllowance(address(lockContract), _lockTokenAmount);
             lockContract.unlock(_forUser,_lockRecordId);
             emit EmergencyUnlock(_forUser, _lockRecordId);
         }
@@ -139,10 +158,9 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         //require(msg.sender != address(0), 'StakingPool: _forUser can not be Zero');
         require(_amount >= 0, 'StakingPool: token amount must be greater than Zero');
-
-        //uint256 lockTokenAmount = _amount.mul(lockContract.stakeTokenRatio()).div(lockContract.denominator());
-        lockToken.safeTransferFrom(msg.sender, address(this), _amount);
-        lockToken.safeIncreaseAllowance(address(lockContract), _amount);
+        uint256 lockTokenAmount = _amount.mul(lockContract.stakeTokenRatio()).div(lockContract.denominator());
+        lockToken.safeTransferFrom(msg.sender, address(this), lockTokenAmount);
+        // lockToken.safeIncreaseAllowance(address(lockContract), lockTokenAmount);
         lockContract.unstake(_forUser, _amount);
         emit EmergencyUnstake(_forUser, _amount);
     }
