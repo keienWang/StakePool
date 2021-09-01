@@ -63,7 +63,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
 
     mapping(address => bool) public admins;
     modifier onlyAdmin virtual {
-        require( admins[msg.sender] || msg.sender == owner());
+        require(admins[msg.sender] || msg.sender == owner());
         _;
     }
     modifier started virtual {
@@ -74,6 +74,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     constructor(uint256 _startBlock, uint256 _minimumLockAmount)  {
         startBlock = _startBlock;
         minimumLockAmount = _minimumLockAmount;
+        admins[msg.sender] = true;
     }
 
     function setStartBlock(uint256 _startBlock) external onlyOwner{
