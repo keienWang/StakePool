@@ -306,7 +306,7 @@ contract LockToken is ERC20, Ownable{
 
     IERC20 public token;
     mapping(uint256 => uint256) public lockTokenBlockNumberAndRatios;
-    uint256 constant denominator = 1000;
+    uint256 constant public denominator = 1000;
 
     struct LockRecord {
         address user;
