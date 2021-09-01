@@ -23,7 +23,7 @@ interface LockToken {
     function unstake(address _forUser, uint256 _tokenAmount) external;
 }
 
-contract StakingPool is Ownable, CheckContract, BaseMath {
+contract BAIStakingPool is Ownable, CheckContract, BaseMath {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -254,6 +254,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
                 uint256 addrBalance = rewardTokens[i].balanceOf(address(this));
                 if (addrBalance > 0) {
                    rewardTokens[i].safeTransfer(_to, addrBalance);
+                   totalRewards[rewardTokens[i]] == 0;
                 }
             }
         }
