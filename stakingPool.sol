@@ -33,7 +33,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     event totalLockTokenUpdated(uint256 _totalLockToken);
     event StakerSnapshotsUpdated(address _staker, IERC20 _token, uint256 _reward);
     event EmergencyStop(address indexed _user, address _to);
-    event EmergencyUnstake(address indexed _user, uint256 indexed _amount);
+    event EmergencyUnstake(address indexed _user, uint256 indexed _lockTokenAmount);
     event EmergencyUnlock(address indexed _user, uint256 indexed _lockId);
 
     bool stopped;
@@ -112,7 +112,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         if (_requireUserHasStake(_userLockTokenAmount)){
             (,,uint256 _lockTokenAmount,,,) = lockContract.getLockRecord(_lockRecordId);
             lockToken.safeTransferFrom(msg.sender, address(this), _lockTokenAmount);
-            lockToken.safeIncreaseAllowance(address(lockToken), _lockTokenAmount);
+            lockToken.safeIncreaseAllowance(address(lockContract), _lockTokenAmount);
             lockContract.unlock(_forUser,_lockRecordId);
             emit EmergencyUnlock(_forUser, _lockRecordId);
         }
@@ -128,21 +128,21 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         lockContract.stake(_forUser, _amount);
     }
 
-    function unstake(address _forUser, uint256 _amount) external {
+    function unstake(address _forUser, uint256 _lockTokenAmount) external {
         harvestAll(_forUser);
-        emergencyUnstake(_forUser, _amount);
+        emergencyUnstake(_forUser, _lockTokenAmount);
     }
 
-    function emergencyUnstake(address _forUser, uint256 _amount) public {
+    function emergencyUnstake(address _forUser, uint256 _lockTokenAmount) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         //require(msg.sender != address(0), 'StakingPool: _forUser can not be Zero');
-        require(_amount >= 0, 'StakingPool: token amount must be greater than Zero');
+        require(_lockTokenAmount >= 0, 'StakingPool: token amount must be greater than Zero');
 
-        uint256 lockTokenAmount = _amount.mul(lockContract.stakeTokenRatio()).div(lockContract.denominator());
-        lockToken.safeTransferFrom(msg.sender, address(this), lockTokenAmount);
-        lockToken.safeIncreaseAllowance(address(lockToken), lockTokenAmount);
-        lockContract.unstake(_forUser, _amount);
-        emit EmergencyUnstake(_forUser, _amount);
+        //uint256 lockTokenAmount = _amount.mul(lockContract.stakeTokenRatio()).div(lockContract.denominator());
+        lockToken.safeTransferFrom(msg.sender, address(this), _lockTokenAmount);
+        lockToken.safeIncreaseAllowance(address(lockContract), _lockTokenAmount);
+        lockContract.unstake(_forUser, _lockTokenAmount);
+        emit EmergencyUnstake(_forUser, _lockTokenAmount);
     }
 
     function harvest(address _forUser, IERC20 _rewardToken) public {
