@@ -1,9 +1,7 @@
+// SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.0;
+pragma solidity ^0.8.0;
 
-/**
- * @dev Interface of the ERC20 standard as defined in the EIP.
- */
 interface IERC20 {
     /**
      * @dev Returns the amount of tokens in existence.
@@ -58,7 +56,11 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
 
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
@@ -75,9 +77,13 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-// File: @openzeppelin/contracts/math/SafeMath.sol
-
+contract BaseMath {
+    uint constant public DECIMAL_PRECISION = 1e18;
+}
 /**
+ * Based on OpenZeppelin's SafeMath:
+ * https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/math/SafeMath.sol
+ *
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
  * checks.
  *
@@ -98,7 +104,6 @@ library SafeMath {
      * Counterpart to Solidity's `+` operator.
      *
      * Requirements:
-     *
      * - Addition cannot overflow.
      */
     function add(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -115,7 +120,6 @@ library SafeMath {
      * Counterpart to Solidity's `-` operator.
      *
      * Requirements:
-     *
      * - Subtraction cannot overflow.
      */
     function sub(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -129,8 +133,9 @@ library SafeMath {
      * Counterpart to Solidity's `-` operator.
      *
      * Requirements:
-     *
      * - Subtraction cannot overflow.
+     *
+     * _Available since v2.4.0._
      */
     function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
         require(b <= a, errorMessage);
@@ -146,7 +151,6 @@ library SafeMath {
      * Counterpart to Solidity's `*` operator.
      *
      * Requirements:
-     *
      * - Multiplication cannot overflow.
      */
     function mul(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -172,7 +176,6 @@ library SafeMath {
      * uses an invalid opcode to revert (consuming all remaining gas).
      *
      * Requirements:
-     *
      * - The divisor cannot be zero.
      */
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -188,10 +191,12 @@ library SafeMath {
      * uses an invalid opcode to revert (consuming all remaining gas).
      *
      * Requirements:
-     *
      * - The divisor cannot be zero.
+     *
+     * _Available since v2.4.0._
      */
     function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        // Solidity only automatically asserts when dividing by 0
         require(b > 0, errorMessage);
         uint256 c = a / b;
         // assert(a == b * c + a % b); // There is no case in which this doesn't hold
@@ -208,7 +213,6 @@ library SafeMath {
      * invalid opcode to revert (consuming all remaining gas).
      *
      * Requirements:
-     *
      * - The divisor cannot be zero.
      */
     function mod(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -224,8 +228,9 @@ library SafeMath {
      * invalid opcode to revert (consuming all remaining gas).
      *
      * Requirements:
-     *
      * - The divisor cannot be zero.
+     *
+     * _Available since v2.4.0._
      */
     function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
         require(b != 0, errorMessage);
@@ -233,60 +238,24 @@ library SafeMath {
     }
 }
 
-
-/*
- * @dev Provides information about the current execution context, including the
- * sender of the transaction and its data. While these are generally available
- * via msg.sender and msg.data, they should not be accessed in such a direct
- * manner, since when dealing with GSN meta-transactions the account sending and
- * paying for execution may not be the actual sender (as far as an application
- * is concerned).
- *
- * This contract is only required for intermediate, library-like contracts.
- */
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address payable) {
-        return payable(msg.sender);
-    }
-
-    function _msgData() internal view virtual returns (bytes memory) {
-        this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
-        return msg.data;
-    }
-}
-
-// File: @openzeppelin/contracts/access/Ownable.sol
-
-/**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (an owner) that can be granted exclusive access to
- * specific functions.
- *
- * By default, the owner account will be the one that deploys the contract. This
- * can later be changed with {transferOwnership}.
- *
- * This module is used through inheritance. It will make available the modifier
- * `onlyOwner`, which can be applied to your functions to restrict their use to
- * the owner.
- */
-contract Ownable is Context {
+contract Ownable {
     address private _owner;
-
+    
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
      */
     constructor ()  {
-        address msgSender = _msgSender();
-        _owner = msgSender;
-        emit OwnershipTransferred(address(0), msgSender);
+        _owner = msg.sender;
+       
+        emit OwnershipTransferred(address(0), msg.sender);
     }
 
     /**
      * @dev Returns the address of the current owner.
      */
-    function owner() external view returns (address) {
+    function owner() public view returns (address) {
         return _owner;
     }
 
@@ -294,32 +263,33 @@ contract Ownable is Context {
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
-        require(_owner == _msgSender(), "Ownable: caller is not the owner");
+        require(isOwner(), "Ownable: caller is not the owner");
         _;
+    }
+ 
+    /**
+     * @dev Returns true if the caller is the current owner.
+     */
+    function isOwner() public view returns (bool) {
+        return msg.sender == _owner;
     }
 
     /**
      * @dev Leaves the contract without owner. It will not be possible to call
-     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     * `onlyOwner` functions anymore.
      *
      * NOTE: Renouncing ownership will leave the contract without an owner,
      * thereby removing any functionality that is only available to the owner.
+     *
+     * NOTE: This function is not safe, as it doesn’t check owner is calling it.
+     * Make sure you check it before calling it.
      */
-    function renounceOwnership() external virtual onlyOwner {
+    function _renounceOwnership() internal {
         emit OwnershipTransferred(_owner, address(0));
         _owner = address(0);
     }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Can only be called by the current owner.
-     */
-    function transferOwnership(address newOwner) external virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        emit OwnershipTransferred(_owner, newOwner);
-        _owner = newOwner;
-    }
 }
+
 /**
  * @dev Collection of functions related to the address type
  */
@@ -527,7 +497,6 @@ library Address {
     }
 }
 
-
 /**
  * @title SafeERC20
  * @dev Wrappers around ERC20 operations that throw on failure (when the token
@@ -620,9 +589,61 @@ library SafeERC20 {
     }
 }
 
-interface TokenAmountLike {
-    // get the token0 amount from the token1 amount
-    function getTokenAmount(address _token0, address _token1, uint256 _token1Amount)  external view returns (uint256);
+contract CheckContract {
+    /**
+     * Check that the account is an already deployed non-destroyed contract.
+     * See: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Address.sol#L12
+     */
+    function checkContract(address _account) internal view {
+        require(_account != address(0), "Account cannot be zero address");
+
+        uint256 size;
+        // solhint-disable-next-line no-inline-assembly
+        assembly { size := extcodesize(_account) }
+        require(size > 0, "Account code size cannot be zero");
+    }
+}
+
+/**
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+}
+
+/**
+ * @dev Interface for the optional metadata functions from the ERC20 standard.
+ *
+ * _Available since v4.1._
+ */
+interface IERC20Metadata is IERC20 {
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external view returns (string memory);
+
+    /**
+     * @dev Returns the symbol of the token.
+     */
+    function symbol() external view returns (string memory);
+
+    /**
+     * @dev Returns the decimals places of the token.
+     */
+    function decimals() external view returns (uint8);
 }
 
 /**
@@ -653,6 +674,15 @@ contract ReentrancyGuard {
     rentrancy_lock = false;
   }
 
+}
+
+interface TokenAmountLike {
+    // get the token0 amount from the token1 amount
+    function getTokenAmount(address _token0, address _token1, uint256 _token1Amount)  external view returns (uint256);
+}
+
+interface LockToken{
+    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external  returns (uint256 _id);
 }
 
 // MasterChef is the master of Sushi. He can make Sushi and he is a fair guy.
@@ -695,30 +725,23 @@ contract MasterChef is Ownable, ReentrancyGuard{
         uint256 startBlock; // Reward start block.
         uint256 endBlock;  // Reward end block.
         uint256 rewarded;// the total sushi has beed reward, including the dev and user harvest
-        
         uint256 operationFee;// Charged when user operate the pool, only deposit firstly.
         address operationFeeToken;// empty reprsents charged with mainnet token.
-        
         uint16 harvestFeeRatio;// Charged when harvest, div RATIO_BASE for the real ratio, like 100 for 10%
         address harvestFeeToken;// empty reprsents charged with mainnet token.
-        
         bool rewardDev;// if reward dev when reward the farmers.
     }
     
     uint256 private constant ACC_SUSHI_PRECISION = 1e12;
-    
     uint8 public constant ZERO = 0 ;
     uint16 public constant RATIO_BASE = 1000;
-    
     uint8 public constant DEV1_SUSHI_REWARD_RATIO = 140;// div RATIO_BASE
     uint8 public constant DEV2_SUSHI_REWARD_RATIO = 37;// div RATIO_BASE
     uint8 public constant DEV3_SUSHI_REWARD_RATIO = 23;// div RATIO_BASE
     uint16 public constant MINT_SUSHI_REWARD_RATIO = 800;// div RATIO_BASE
-    
     uint16 public constant DEV1_FEE_RATIO = 500;// div RATIO_BASE
     uint16 public constant DEV2_FEE_RATIO = 250;// div RATIO_BASE
     uint16 public constant DEV3_FEE_RATIO = 250;// div RATIO_BASE
-    
     uint16 public harvestFeeBuyRatio = 900;// the buy ratio for harvest, div RATIO_BASE
     uint16 public harvestFeeDevRatio = 100;// the dev ratio for harvest, div RATIO_BASE
     
@@ -728,16 +751,15 @@ contract MasterChef is Ownable, ReentrancyGuard{
     address payable public dev1Address;
     address payable public dev2Address;
     address payable public dev3Address;
-    
     address payable public buyAddress;// address for the fee to buy HKR
-    
+    uint256 public lockBlockNumber = 864000;
     TokenAmountLike public tokenAmountContract;
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
+    LockToken public lockToken;
     // Info of each user that stakes LP tokens.
     mapping (uint256 => mapping (address => UserInfo)) public userInfo;
-    
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -753,14 +775,10 @@ contract MasterChef is Ownable, ReentrancyGuard{
     event UpdateDev3Address(address payable dev3Address);
     event UpdateBuyAddress(address payable buyAddress);
     event AddRewardForPool(uint256 pid, uint256 addSushiPerPool, uint256 addSushiPerBlock, bool withSushiTransfer);
-    
     event SetPoolOperationFee(uint256 pid, uint256 operationFee, address operationFeeToken, bool feeUpdate, bool feeTokenUpdate);
     event SetPoolHarvestFee(uint256 pid, uint16 harvestFeeRatio, address harvestFeeToken, bool feeRatioUpdate, bool feeTokenUpdate);
-    
     event SetTokenAmountContract(TokenAmountLike tokenAmountContract);
-    
     event SetHarvestFeeRatio(uint16 harvestFeeBuyRatio, uint16 harvestFeeDevRatio);
-
     modifier validatePoolByPid(uint256 _pid) {
         require(_pid < poolInfo .length, "Pool does not exist");
         _;
@@ -772,7 +790,9 @@ contract MasterChef is Ownable, ReentrancyGuard{
         address payable _dev2Address,
         address payable _dev3Address,
         address payable _buyAddress,
-        TokenAmountLike _tokenAmountContract
+        TokenAmountLike _tokenAmountContract,
+        LockToken _lockToken,
+        uint256 _lockBlockNumber
     )  {
         sushi = _sushi;
         dev1Address = _dev1Address;
@@ -780,10 +800,15 @@ contract MasterChef is Ownable, ReentrancyGuard{
         dev3Address = _dev3Address;
         buyAddress = _buyAddress;
         tokenAmountContract = _tokenAmountContract;
-    }
+        lockToken = _lockToken;
+        lockBlockNumber = _lockBlockNumber;
+        }
 
     function poolLength() external view returns (uint256) {
         return poolInfo.length;
+    }
+    function setLockBlockNumber(uint256 _lockBlockNumber)external onlyOwner{
+        lockBlockNumber = _lockBlockNumber;
     }
     
     function setTokenAmountContract(TokenAmountLike _tokenAmountContract) external onlyOwner {
@@ -894,7 +919,6 @@ contract MasterChef is Ownable, ReentrancyGuard{
         if(_feeRatioUpdate){
             pool.harvestFeeRatio = _harvestFeeRatio;
         }
-        
         if(_feeTokenUpdate){
             pool.harvestFeeToken = _harvestFeeToken;
         }
@@ -981,7 +1005,6 @@ contract MasterChef is Ownable, ReentrancyGuard{
             accSushiPerShare = accSushiPerShare.add(poolSushiReward.mul(ACC_SUSHI_PRECISION).div(lpSupply));
         }
         sushiReward = user.amount.mul(accSushiPerShare).div(ACC_SUSHI_PRECISION).sub(user.rewardDebt);
-        
         fee = getHarvestFee(pool, sushiReward);
     }
     
@@ -1039,9 +1062,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
                 IERC20 token = IERC20(_pool.operationFeeToken);
                 uint feeBalance = token.balanceOf(msg.sender);
                 require(feeBalance >= _pool.operationFee, "Fee is not enough!");
-                
                 token.safeTransferFrom(msg.sender, address(this), _pool.operationFee);
-                
                 token.safeTransfer(dev1Address, dev1Amount);
                 token.safeTransfer(dev2Address, dev2Amount);
                 token.safeTransfer(dev3Address, dev3Amount);
@@ -1117,11 +1138,9 @@ contract MasterChef is Ownable, ReentrancyGuard{
         if(fee > ZERO){
             uint256 devFee = fee.mul(harvestFeeDevRatio).div(RATIO_BASE);
             uint256 buyFee = fee.sub(devFee);
-            
             uint256 dev1Amount = devFee.mul(DEV1_FEE_RATIO).div(RATIO_BASE);
             uint256 dev2Amount = devFee.mul(DEV2_FEE_RATIO).div(RATIO_BASE);
             uint256 dev3Amount = devFee.sub(dev1Amount).sub(dev2Amount);
-            
             if(isMainnetToken(_pool.harvestFeeToken)){
                 require(msg.value == fee, "Fee is not enough or too much!");
                 dev1Address.transfer(dev1Amount);
@@ -1170,9 +1189,11 @@ contract MasterChef is Ownable, ReentrancyGuard{
     function safeTransferTokenFromThis(IERC20 _token, address _to, uint256 _amount) internal {
         uint256 bal = _token.balanceOf(address(this));
         if (_amount > bal) {
-            _token.safeTransfer(_to, bal);
+            // _token.safeTransfer(_to, bal);
+            lockToken.lock(_to, bal, lockBlockNumber);
         } else {
-            _token.safeTransfer(_to, _amount);
+            // _token.safeTransfer(_to, _amount);
+            lockToken.lock(_to, _amount, lockBlockNumber);
         }
     }
 
