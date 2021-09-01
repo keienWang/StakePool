@@ -254,8 +254,8 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
                 uint256 addrBalance = rewardTokens[i].balanceOf(address(this));
                 if (addrBalance > 0) {
                    rewardTokens[i].safeTransfer(_to, addrBalance);
-                   totalRewards[rewardTokens[i]] == 0;
                 }
+                totalRewards[rewardTokens[i]] = 0;
             }
         }
         stopped = true;
