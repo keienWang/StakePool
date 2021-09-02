@@ -338,14 +338,17 @@ contract LockToken is ERC20, Ownable{
     mapping(address => uint256) public userLockTokenAmount;
 
     mapping(address => bool) public admins;
-    bool checkAdmin;
+    bool public checkAdmin;
     modifier onlyAdmin virtual {
         if (checkAdmin){
             require(admins[msg.sender] || msg.sender == owner());
         }
         _;
     }
-
+    
+    event AdminSet(address _account, bool _isAdmin);
+    event CheckAdminSet(bool _checkAdmin);
+    event MinimumLockQuantitySet(uint256 _minimumLockAmount);
     event Lock(address User, address ForUser, uint256 TokenAmount, uint256 LockTokenAmount, uint256 LockedBlockNumber);
     event Unlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount);
     event Unstake(address User, uint256 TokenAmount, uint256 LockTokenAmount);
@@ -356,18 +359,22 @@ contract LockToken is ERC20, Ownable{
         minimumLockAmount = _minimumLockAmount;
         checkAdmin = true;
         admins[msg.sender] = true;
+        emit CheckAdminSet(true);
+        emit AdminSet(msg.sender, true);
     }
 
     function setAdmin(address _account, bool _isAdmin) external onlyOwner {
         require(_account != address(0), "LockToken: _account must not be 0");
         admins[_account] = _isAdmin;
+        emit AdminSet(_account, _isAdmin);
     }
 
-    function setCheckAdmin(bool _checkAdmin) external onlyOwner{
+    function setCheckAdmin(bool _checkAdmin) external onlyOwner {
         checkAdmin = _checkAdmin;
+        emit CheckAdminSet(_checkAdmin);
     }
 
-    function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint16 _lockTokenRatio) external onlyAdmin {
+    function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint256 _lockTokenRatio) external onlyOwner {
         require(_lockTokenBlockNumber > 0, "LockToken: _lockTokenBlockNumber must be greater than 0");
         require(_lockTokenRatio > 0, "LockToken: _lockTokenRatio must be greater than 0");
         lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
@@ -375,6 +382,7 @@ contract LockToken is ERC20, Ownable{
     
     function setMinimumLockQuantity(uint256 _minimumLockAmount) external onlyOwner {
         minimumLockAmount = _minimumLockAmount;
+        emit MinimumLockQuantitySet(_minimumLockAmount);
     }
     
     function getLockTokenAmount(uint256 _amount, uint256 _lockTokenBlockNumber) public view returns (uint256 _lockTokenAmount) {
