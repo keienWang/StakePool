@@ -345,7 +345,7 @@ contract LockToken is ERC20, Ownable{
         }
         _;
     }
-    
+
     event AdminSet(address _account, bool _isAdmin);
     event CheckAdminSet(bool _checkAdmin);
     event MinimumLockQuantitySet(uint256 _minimumLockAmount);
@@ -379,12 +379,12 @@ contract LockToken is ERC20, Ownable{
         require(_lockTokenRatio > 0, "LockToken: _lockTokenRatio must be greater than 0");
         lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
     }
-    
+
     function setMinimumLockQuantity(uint256 _minimumLockAmount) external onlyOwner {
         minimumLockAmount = _minimumLockAmount;
         emit MinimumLockQuantitySet(_minimumLockAmount);
     }
-    
+
     function getLockTokenAmount(uint256 _amount, uint256 _lockTokenBlockNumber) public view returns (uint256 _lockTokenAmount) {
         if(_lockTokenBlockNumber > 0){
             _lockTokenAmount = _amount.mul(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber])

@@ -26,14 +26,14 @@ interface LockToken {
 contract StakingPool is Ownable, CheckContract, BaseMath {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-    
+
     uint256 public constant REWARD_PRECISION = 1e18;
     IERC20 public token;
     IERC20 public lockToken;
     LockToken public lockContract;
     uint256 public startBlock;
     uint256 public minimumLockAmount;
-		
+
     mapping(IERC20 => uint256) public totalRewards;
     // the total rewards of tokens for per stake
     mapping(IERC20 => uint256) public totalRewardsPerStaked;
@@ -52,18 +52,18 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
     event AdminSet(address _account, bool _isAdmin);
     event MinimumLockQuantitySet(uint256 _minimumLockAmount);
     event Restart();
-    event StakeChanged(address indexed _staker, uint256 _newStake);
-    event HarvestAll(address indexed _staker);
-    event Harvest(address indexed _staker, IERC20 _tokenAddress, uint256 _tokenReward);
+    event StakeChanged(address _staker, uint256 _newStake);
+    event HarvestAll(address _staker);
+    event Harvest(address _staker, IERC20 _tokenAddress, uint256 _tokenReward);
     event RewardUpdated(IERC20 _rewardtokenAddress, uint256 _reward, uint256 _tokenReward, uint256 addedTokenRewardPerLockToken);
     event totalLockTokenUpdated(uint256 _totalLockToken);
     event StakerSnapshotsUpdated(address _staker, IERC20 _token, uint256 _reward);
-    event EmergencyStop(address indexed _user, address _to);
-    event UnstakeWithoutReward(address indexed _user, uint256 indexed _lockTokenAmount);
-    event UnlockWithoutReward(address indexed _user, uint256 indexed _lockId);
+    event EmergencyStop(address _user, address _to);
+    event UnstakeWithoutReward(address _user, uint256 _lockTokenAmount);
+    event UnlockWithoutReward(address _user, uint256 _lockId);
     event AddRewardToken(IERC20 _newToken);
     event DelRewardToken(IERC20 _delToken);
-    
+
     bool public stopped;
     modifier notStopped virtual {
         require(!stopped, "StakingPool: this pool is stopped!");
@@ -75,7 +75,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         require(admins[msg.sender] || msg.sender == owner());
         _;
     }
-    
+
     modifier started virtual {
         require(startBlock <= block.number, "StakingPool: Pool not start!");
         _;
@@ -167,7 +167,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath {
         harvestAll(_forUser);
         unstakeWithoutReward(_forUser, _lockTokenAmount);
     }
-    
+
     //unstake by token amount
     function unstakeWithoutReward(address _forUser, uint256 _amount) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
