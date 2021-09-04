@@ -471,7 +471,8 @@ contract LockToken is ERC20, Ownable{
     function unstake(address _forUser, uint256 _tokenAmount) external onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: unstake not supported");
         require(userStakedToken[_forUser] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
-        uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
+        //uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
+        uint256 lockTokenAmount = getLockTokenAmount(_tokenAmount, 0);
         require(_balances[msg.sender] >= lockTokenAmount, "LockToken: LockToken balance is not enough!");
         _burn(msg.sender, lockTokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].sub(_tokenAmount);
