@@ -683,6 +683,7 @@ interface TokenAmountLike {
 
 interface LockToken{
     function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external  returns (uint256 _id);
+    function minimumLockAmount()external returns (uint256 min);
 }
 
 // MasterChef is the master of Sushi. He can make Sushi and he is a fair guy.
@@ -976,7 +977,12 @@ contract MasterChef is Ownable, ReentrancyGuard{
     function transferToDev(PoolInfo storage _pool, address _devAddress, uint16 _devRatio, uint256 _sushiReward) private returns (uint256 amount){
         if(_devRatio > ZERO){
             amount = _sushiReward.mul(_devRatio).div(RATIO_BASE);
-            safeTransferTokenFromThis(sushi, _devAddress, amount);
+             if (amount < lockToken.minimumLockAmount()){
+                safeTransferTokenFromThis(sushi,_devAddress, amount);
+            }else{
+                safeLockTokenFromThis(sushi, _devAddress, amount);
+            }
+            // safeLockTokenFromThis(sushi, _devAddress, amount);
             _pool.rewarded = _pool.rewarded.add(amount);
         }
     }
@@ -1034,7 +1040,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
         }
         checkOperationFee(pool, _amount);
         UserInfo storage user = userInfo[_pid][msg.sender];
-        harvest(_pid, msg.sender);
+        _harvest(_pid, msg.sender, true);
         if(pool.lpToken != IERC20(address(0))){
             pool.lpToken.safeTransferFrom(msg.sender, address(this), _amount);
         }
@@ -1080,7 +1086,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(block.number >= pool.startBlock,"this pool is not start!");
         require(user.amount >= _amount, "withdraw: not good");
-        harvest(_pid, msg.sender);
+        _harvest(_pid, msg.sender, true);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accSushiPerShare).div(ACC_SUSHI_PRECISION);
         pool.amount = pool.amount.sub(_amount);
@@ -1112,8 +1118,14 @@ contract MasterChef is Ownable, ReentrancyGuard{
         }
         emit EmergencyWithdraw(msg.sender, _pid, oldAmount);
     }
+    
+    function harvest(uint256 _pid, address _to)external nonReentrant payable validatePoolByPid(_pid) returns (bool success){
+       return _harvest(_pid, _to, false);
+    }
+    
 
-    function harvest(uint256 _pid, address _to) public nonReentrant payable validatePoolByPid(_pid) returns (bool success) {
+    function _harvest(uint256 _pid, address _to, bool isInternal) internal nonReentrant  validatePoolByPid(_pid) returns (bool success) {
+        
         if(_to == address(0)){
             _to = msg.sender;
         }
@@ -1121,10 +1133,18 @@ contract MasterChef is Ownable, ReentrancyGuard{
         UserInfo storage user = userInfo[_pid][_to];
         updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accSushiPerShare).div(ACC_SUSHI_PRECISION).sub(user.rewardDebt);
+        if (!isInternal){
+            require(pending > lockToken.minimumLockAmount(),"reward too low!");
+        }
         if (pending > ZERO) {
             success = true;
             checkHarvestFee(pool, pending);
-            safeTransferTokenFromThis(sushi, _to, pending);
+            if (isInternal && pending < lockToken.minimumLockAmount()){
+                safeTransferTokenFromThis(sushi,_to, pending);
+            }else{
+                safeLockTokenFromThis(sushi, _to, pending);
+            }
+            
             pool.rewarded = pool.rewarded.add(pending);
             user.rewardDebt = user.amount.mul(pool.accSushiPerShare).div(ACC_SUSHI_PRECISION);
         } else{
@@ -1186,7 +1206,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
     }
     
     // Safe transfer token function, just in case if rounding error causes pool to not have enough tokens.
-    function safeTransferTokenFromThis(IERC20 _token, address _to, uint256 _amount) internal {
+    function safeLockTokenFromThis(IERC20 _token, address _to, uint256 _amount) internal {
         uint256 bal = _token.balanceOf(address(this));
         if (_amount > bal) {
             // _token.safeTransfer(_to, bal);
@@ -1194,6 +1214,17 @@ contract MasterChef is Ownable, ReentrancyGuard{
         } else {
             // _token.safeTransfer(_to, _amount);
             lockToken.lock(_to, _amount, lockBlockNumber);
+        }
+    }
+    
+    function safeTransferTokenFromThis(IERC20 _token, address _to, uint256 _amount) internal {
+        uint256 bal = _token.balanceOf(address(this));
+        if (_amount > bal) {
+            _token.safeTransfer(_to, bal);
+            // lockToken.lock(_to, bal, lockBlockNumber);
+        } else {
+            _token.safeTransfer(_to, _amount);
+            // lockToken.lock(_to, _amount, lockBlockNumber);
         }
     }
 

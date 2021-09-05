@@ -300,7 +300,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     }
 }
 
-contract LockToken is ERC20, Ownable{
+contract LockToken is ERC20, Ownable, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -380,7 +380,7 @@ contract LockToken is ERC20, Ownable{
         lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
     }
 
-    function setMinimumLockQuantity(uint256 _minimumLockAmount) external onlyOwner {
+    function setMinimumLockQuantity(uint256 _minimumLockAmount) external nonReentrant onlyOwner {
         minimumLockAmount = _minimumLockAmount;
         emit MinimumLockQuantitySet(_minimumLockAmount);
     }
@@ -395,7 +395,7 @@ contract LockToken is ERC20, Ownable{
     }
 
     // lock token for LockToken
-    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external onlyAdmin returns (uint256 _id) {
+    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external nonReentrant onlyAdmin returns (uint256 _id) {
         require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
         require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
@@ -421,7 +421,7 @@ contract LockToken is ERC20, Ownable{
         emit Lock(msg.sender, _forUser, _amount, lockTokenAmount, _lockTokenBlockNumber);
     }
 
-    function unlock(address _forUser, uint256 _lockRecordId) external onlyAdmin {
+    function unlock(address _forUser, uint256 _lockRecordId) external nonReentrant onlyAdmin {
         require(block.number >= lockRecords[_lockRecordId].unlockBlockNumber, 'LockToken: Tokens are still locked');
         require(_forUser == lockRecords[_lockRecordId].user, 'LockToken: only can be unlocked for user himself');
         require(!lockRecords[_lockRecordId].unlocked, 'LockToken: Tokens has already been unlocked');
@@ -450,7 +450,7 @@ contract LockToken is ERC20, Ownable{
     }
 
     // stake token for LockToken without lock
-    function stake(address _forUser, uint256 _tokenAmount) external onlyAdmin {
+    function stake(address _forUser, uint256 _tokenAmount) external nonReentrant onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: stake not supported");
         // require(_tokenAmount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
         require(_tokenAmount > 0, "LockToken: amount must be greater than 0");
@@ -468,7 +468,7 @@ contract LockToken is ERC20, Ownable{
     }
 
     // unstake token for LockToken without lock
-    function unstake(address _forUser, uint256 _tokenAmount) external onlyAdmin {
+    function unstake(address _forUser, uint256 _tokenAmount) external nonReentrant onlyAdmin {
         require(stakeTokenRatio > 0, "LockToken: unstake not supported");
         require(userStakedToken[_forUser] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
         //uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
