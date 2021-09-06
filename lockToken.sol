@@ -363,7 +363,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         emit AdminSet(msg.sender, true);
     }
 
-    function setAdmin(address _account, bool _isAdmin) external onlyOwner {
+    function setAdmin(address _account, bool _isAdmin) external nonReentrant onlyOwner {
         require(_account != address(0), "LockToken: _account must not be 0");
         admins[_account] = _isAdmin;
         emit AdminSet(_account, _isAdmin);
@@ -397,7 +397,9 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     // lock token for LockToken
     function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external nonReentrant onlyAdmin returns (uint256 _id) {
         require(_forUser != address(0), 'LockToken: _forUser can not be Zero');
-        require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
+        if (!admins[msg.sender]){
+            require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
+        }
         require(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] != 0, "LockToken: _lockTokenBlockNumber does not support!");
         //token.safeApprove(address(this), _amount);
         token.safeTransferFrom(msg.sender, address(this), _amount);

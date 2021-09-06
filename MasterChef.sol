@@ -977,12 +977,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
     function transferToDev(PoolInfo storage _pool, address _devAddress, uint16 _devRatio, uint256 _sushiReward) private returns (uint256 amount){
         if(_devRatio > ZERO){
             amount = _sushiReward.mul(_devRatio).div(RATIO_BASE);
-             if (amount < lockToken.minimumLockAmount()){
-                safeTransferTokenFromThis(sushi,_devAddress, amount);
-            }else{
-                safeLockTokenFromThis(sushi, _devAddress, amount);
-            }
-            // safeLockTokenFromThis(sushi, _devAddress, amount);
+            safeLockTokenFromThis(sushi, _devAddress, amount);
             _pool.rewarded = _pool.rewarded.add(amount);
         }
     }
@@ -1139,12 +1134,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
         if (pending > ZERO) {
             success = true;
             checkHarvestFee(pool, pending);
-            if (isInternal && pending < lockToken.minimumLockAmount()){
-                safeTransferTokenFromThis(sushi,_to, pending);
-            }else{
-                safeLockTokenFromThis(sushi, _to, pending);
-            }
-            
+            safeLockTokenFromThis(sushi, _to, pending);
             pool.rewarded = pool.rewarded.add(pending);
             user.rewardDebt = user.amount.mul(pool.accSushiPerShare).div(ACC_SUSHI_PRECISION);
         } else{
@@ -1216,18 +1206,6 @@ contract MasterChef is Ownable, ReentrancyGuard{
             lockToken.lock(_to, _amount, lockBlockNumber);
         }
     }
-    
-    function safeTransferTokenFromThis(IERC20 _token, address _to, uint256 _amount) internal {
-        uint256 bal = _token.balanceOf(address(this));
-        if (_amount > bal) {
-            _token.safeTransfer(_to, bal);
-            // lockToken.lock(_to, bal, lockBlockNumber);
-        } else {
-            _token.safeTransfer(_to, _amount);
-            // lockToken.lock(_to, _amount, lockBlockNumber);
-        }
-    }
-
      // Update dev1 address by the previous dev.
     function updateDev1Address(address payable _dev1Address) external {
         require(msg.sender == dev1Address, "dev1: wut?");
