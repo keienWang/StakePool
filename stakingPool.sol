@@ -11,9 +11,9 @@ interface LockToken {
         uint256 unlockBlockNumber;
         bool unlocked;
     }
-    function denominator()external view returns(uint256);
-    function stakeTokenRatio()external view returns(uint256);
-    function  totalLockTokenAmount()external view returns(uint256 _totalLockTokenAmount);
+    function denominator() external view returns(uint256);
+    function stakeTokenRatio() external view returns(uint256);
+    function totalLockTokenAmount() external view returns(uint256 _totalLockTokenAmount);
     function getUserAllStakedToken(address _user) external view returns (uint256 _tokenAmount, uint256 _lockTokenAmount);
     function getLockRecord(uint256 _id) view external returns (address _user, uint256 _tokenAmount,
     uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
