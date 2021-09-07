@@ -114,7 +114,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard{
         emit LockContractSet(_lockContract);
     }
 
-    function setAdmin(address _account, bool _isAdmin) external nonReentrant onlyOwner {
+    function setAdmin(address _account, bool _isAdmin) external onlyOwner {
         admins[_account] = _isAdmin;
         emit AdminSet(_account, _isAdmin);
     }
