@@ -380,7 +380,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         lockTokenBlockNumberAndRatios[_lockTokenBlockNumber] = _lockTokenRatio;
     }
 
-    function setMinimumLockQuantity(uint256 _minimumLockAmount) external nonReentrant onlyOwner {
+    function setMinimumLockQuantity(uint256 _minimumLockAmount) external onlyOwner {
         minimumLockAmount = _minimumLockAmount;
         emit MinimumLockQuantitySet(_minimumLockAmount);
     }
