@@ -124,7 +124,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard{
         emit MinimumLockQuantitySet(_minimumLockAmount);
     }
 
-    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external nonReentrant started notStopped {
+    function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external started notStopped {
         _requireNonZeroAmount(_amount);
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
         if (!admins[msg.sender]){
@@ -137,7 +137,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard{
     }
 
     // If requested amount > stake, send their entire stake.
-    function unlock(address _forUser, uint256 _lockRecordId) external nonReentrant {
+    function unlock(address _forUser, uint256 _lockRecordId) external {
         harvestAll(_forUser);
         unlockWithoutReward(_forUser, _lockRecordId);
     }
@@ -153,7 +153,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard{
         }
     }
 
-    function stake(address _forUser, uint256 _amount) external nonReentrant started notStopped {
+    function stake(address _forUser, uint256 _amount) external started notStopped {
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
         _requireNonZeroAmount(_amount);
         // require(_amount >= minimumLockAmount, 'StakingPool :  token amount must be greater than minimumLockAmount');
@@ -194,7 +194,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard{
         }
     }
 
-    function harvestAll(address _forUser) public nonReentrant {
+    function harvestAll(address _forUser) public {
         require(_forUser != address(0), 'StakingPool: _forUser can not be Zero');
         for (uint256 i = 0; i < rewardTokens.length; i++){
             harvest(_forUser, rewardTokens[i]);
