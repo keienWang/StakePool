@@ -19,11 +19,13 @@ interface LockToken {
     uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
     function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external returns (uint256 _id) ;
     function unlock(address _forUser,uint256 _lockRecordId) external;
+    function forceUnlockAll() external;
+    function forceUnlock(uint256 _lockRecordId) external;
     function stake(address _forUser, uint256 _tokenAmount) external;
     function unstake(address _forUser, uint256 _tokenAmount) external;
 }
 
-contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard{
+contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -151,6 +153,16 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard{
             lockContract.unlock(_forUser,_lockRecordId);
             emit UnlockWithoutReward(_forUser, _lockRecordId);
         }
+    }
+    
+    //force check and unlock all the lock record which can be unlocked for all the users.
+    function forceUnlockAll() external {
+        lockContract.forceUnlockAll();
+    }
+    
+    //force check and unlock one lock record if it can be unlocked.
+    function forceUnlock(uint256 _lockRecordId) public nonReentrant {
+        lockContract.forceUnlock(_lockRecordId);
     }
 
     function stake(address _forUser, uint256 _amount) external started notStopped {
