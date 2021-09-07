@@ -363,7 +363,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         emit AdminSet(msg.sender, true);
     }
 
-    function setAdmin(address _account, bool _isAdmin) external nonReentrant onlyOwner {
+    function setAdmin(address _account, bool _isAdmin) external onlyOwner {
         require(_account != address(0), "LockToken: _account must not be 0");
         admins[_account] = _isAdmin;
         emit AdminSet(_account, _isAdmin);
