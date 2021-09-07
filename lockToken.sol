@@ -503,21 +503,24 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     }
     
     //force check and unlock all the lock record which can be unlocked for all the users.
-    function forceUnlockAll(uint256 _fromLockRecordId) external onlyAdmin {
+    function forceUnlockAll(uint256 _fromLockRecordStartId, uint256 _fromLockRecordEndId) external onlyAdmin {
+        require(_fromLockRecordStartId < _fromLockRecordEndId, "LockToken:  _fromLockRecordEndId must be less _fromLockRecordStartId! ");
+        require(_fromLockRecordEndId < allLockIds.length, "LockToken : _fromLockRecordEndId must be less allLockIds.length! ");
         uint successCount = 0;
-        for(uint index = 0; index < allLockIds.length; index ++){
-            if(allLockIds[index] < _fromLockRecordId){
+        for(uint index = _fromLockRecordStartId; index < _fromLockRecordEndId + 1; index ++){
+            if(allLockIds[index] < _fromLockRecordStartId){
                 continue;
             }
             if(forceUnlock(allLockIds[index])){
                 successCount ++;
             }
         }
-        emit ForceUnlockAll(_fromLockRecordId, successCount);
+        emit ForceUnlockAll(_fromLockRecordStartId, successCount);
     }
     
     //force check and unlock one lock record if it can be unlocked.
     function forceUnlock(uint256 _lockRecordId) public nonReentrant onlyAdmin returns (bool) {
+        require(_lockRecordId < allLockIds.length, "LockToken : _lockRecordId must be less allLockIds.length!");
         bool success = _unlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].user, false);
         emit ForceUnlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount, success);
         return success;

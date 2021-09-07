@@ -731,6 +731,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
         uint16 harvestFeeRatio;// Charged when harvest, div RATIO_BASE for the real ratio, like 100 for 10%
         address harvestFeeToken;// empty reprsents charged with mainnet token.
         bool rewardDev;// if reward dev when reward the farmers.
+        bool rewardTokenType; //true => bkr, false => lbkr
     }
     
     uint256 private constant ACC_SUSHI_PRECISION = 1e12;
@@ -830,7 +831,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
     // Zero lpToken represents mainnet coin pool.
     function add(uint256 _rewardForEachBlock, IERC20 _lpToken, bool _withUpdate, 
         uint256 _startBlock, uint256 _endBlock, uint256 _operationFee, address _operationFeeToken, 
-        uint16 _harvestFeeRatio, address _harvestFeeToken, bool _withSushiTransfer, bool _rewardDev) external onlyOwner {
+        uint16 _harvestFeeRatio, address _harvestFeeToken, bool _withSushiTransfer, bool _rewardDev, bool _rewardTokenType) external onlyOwner {
         //require(_lpToken != IERC20(ZERO), "lpToken can not be zero!");
         require(_rewardForEachBlock > ZERO, "rewardForEachBlock must be greater than zero!");
         require(_startBlock < _endBlock, "start block must less than end block!");
@@ -850,7 +851,8 @@ contract MasterChef is Ownable, ReentrancyGuard{
             operationFeeToken: _operationFeeToken,
             harvestFeeRatio: _harvestFeeRatio,
             harvestFeeToken: _harvestFeeToken,
-            rewardDev: _rewardDev
+            rewardDev: _rewardDev,
+            rewardTokenType: _rewardTokenType
         }));
         if(_withSushiTransfer){
             uint256 amount = (_endBlock - (block.number > _startBlock ? block.number : _startBlock)).mul(_rewardForEachBlock);
@@ -860,7 +862,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
     }
 
     // Update the given pool's pool info. Can only be called by the owner. 
-    function setPoolInfo(uint256 _pid, uint256 _rewardForEachBlock, bool _withUpdate, uint256 _startBlock, uint256 _endBlock, bool _rewardDev) external validatePoolByPid(_pid) onlyOwner {
+    function setPoolInfo(uint256 _pid, uint256 _rewardForEachBlock, bool _withUpdate, uint256 _startBlock, uint256 _endBlock, bool _rewardDev, bool _rewardTokenType) external validatePoolByPid(_pid) onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -883,6 +885,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
             pool.rewardForEachBlock = _rewardForEachBlock;
         }
         pool.rewardDev = _rewardDev;
+        pool.rewardTokenType = _rewardTokenType;
         emit SetPoolInfo(_pid, _rewardForEachBlock, _withUpdate, _startBlock, _endBlock, _rewardDev);
     }
     
@@ -977,7 +980,12 @@ contract MasterChef is Ownable, ReentrancyGuard{
     function transferToDev(PoolInfo storage _pool, address _devAddress, uint16 _devRatio, uint256 _sushiReward) private returns (uint256 amount){
         if(_devRatio > ZERO){
             amount = _sushiReward.mul(_devRatio).div(RATIO_BASE);
-            safeLockTokenFromThis(sushi, _devAddress, amount);
+            if (_pool.rewardTokenType){
+                safeTransferTokenFromThis(sushi, _devAddress, _amount);
+            }else{
+                safeLockTokenFromThis(sushi, _devAddress, amount);
+            }
+
             _pool.rewarded = _pool.rewarded.add(amount);
         }
     }
@@ -1134,7 +1142,11 @@ contract MasterChef is Ownable, ReentrancyGuard{
         if (pending > ZERO) {
             success = true;
             checkHarvestFee(pool, pending);
-            safeLockTokenFromThis(sushi, _to, pending);
+            if (pool.rewardTokenType){
+                safeTransferTokenFromThis(sushi, _to, pending);
+            }else{
+                safeLockTokenFromThis(sushi, _to, pending);
+            }
             pool.rewarded = pool.rewarded.add(pending);
             user.rewardDebt = user.amount.mul(pool.accSushiPerShare).div(ACC_SUSHI_PRECISION);
         } else{
@@ -1204,6 +1216,16 @@ contract MasterChef is Ownable, ReentrancyGuard{
         } else {
             // _token.safeTransfer(_to, _amount);
             lockToken.lock(_to, _amount, lockBlockNumber);
+        }
+    }
+    function safeTransferTokenFromThis(IERC20 _token, address _to, uint256 _amount) internal {
+        uint256 bal = _token.balanceOf(address(this));
+        if (_amount > bal) {
+            _token.safeTransfer(_to, bal);
+            // lockToken.lock(_to, bal, lockBlockNumber);
+        } else {
+            _token.safeTransfer(_to, _amount);
+            // lockToken.lock(_to, _amount, lockBlockNumber);
         }
     }
      // Update dev1 address by the previous dev.
