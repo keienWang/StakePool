@@ -303,7 +303,10 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 contract LockToken is ERC20, Ownable, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-
+    
+    bool public transferEnabled;
+    mapping(address => bool) public transferWhitelist;
+    
     IERC20 public token;
     mapping(uint256 => uint256) public lockTokenBlockNumberAndRatios;
     uint256 constant public denominator = 1000;
@@ -345,22 +348,37 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         }
         _;
     }
-
+    
+    event TransferEnabledSet(bool _transferEnabled);
+    event TransferWhitelistSet(address _account, bool _canTransfer);
     event AdminSet(address _account, bool _isAdmin);
     event CheckAdminSet(bool _checkAdmin);
     event MinimumLockQuantitySet(uint256 _minimumLockAmount);
     event Lock(address User, address ForUser, uint256 TokenAmount, uint256 LockTokenAmount, uint256 LockedBlockNumber);
     event Unlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount);
+    event ForceUnlockAll(uint256 _fromLockRecordId, uint256 SuccessCount);
+    event ForceUnlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount, bool Success);
     event Unstake(address User, uint256 TokenAmount, uint256 LockTokenAmount);
-
+    
     constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio, uint256 _minimumLockAmount) ERC20 (_name, _symbol) {
         token = _token;
         stakeTokenRatio = _stakeTokenRatio;
         minimumLockAmount = _minimumLockAmount;
         checkAdmin = true;
         admins[msg.sender] = true;
+        transferEnabled = false;
         emit CheckAdminSet(true);
         emit AdminSet(msg.sender, true);
+    }
+    
+    function setTransferEnabled(bool _transferEnabled) external onlyOwner {
+        transferEnabled = _transferEnabled;
+        emit TransferEnabledSet(_transferEnabled);
+    }
+    
+    function setTransferWhitelist(address _account, bool _canTransfer) external onlyOwner {
+        transferWhitelist[_account] = _canTransfer;
+        emit TransferWhitelistSet(_account, _canTransfer);
     }
 
     function setAdmin(address _account, bool _isAdmin) external onlyOwner {
@@ -423,13 +441,28 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         emit Lock(msg.sender, _forUser, _amount, lockTokenAmount, _lockTokenBlockNumber);
     }
 
-    function unlock(address _forUser, uint256 _lockRecordId) external nonReentrant onlyAdmin {
-        require(block.number >= lockRecords[_lockRecordId].unlockBlockNumber, 'LockToken: Tokens are still locked');
-        require(_forUser == lockRecords[_lockRecordId].user, 'LockToken: only can be unlocked for user himself');
-        require(!lockRecords[_lockRecordId].unlocked, 'LockToken: Tokens has already been unlocked');
-        require(_balances[msg.sender] >= lockRecords[_lockRecordId].lockTokenAmount, "LockToken: LockToken balance is not enough!");
+    function unlock(address _forUser, uint256 _lockRecordId) external onlyAdmin {
+        _unlock(_forUser, _lockRecordId, msg.sender, true);
+        emit Unlock(_forUser, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount);
+    }
+    
+    function _unlock(address _forUser, uint256 _lockRecordId, address _burnLockTokenUser, bool _withRequire) internal nonReentrant returns (bool) {
+        bool expired = block.number >= lockRecords[_lockRecordId].unlockBlockNumber;
+        bool userSelf = _forUser == lockRecords[_lockRecordId].user;
+        bool NotUnlocked = !lockRecords[_lockRecordId].unlocked;
+        bool lockTokenBalanceEnough = _balances[_burnLockTokenUser] >= lockRecords[_lockRecordId].lockTokenAmount;
+        if(_withRequire){
+            require(expired, 'LockToken: Tokens are still locked');
+            require(userSelf, 'LockToken: only can be unlocked for user himself');
+            require(NotUnlocked, 'LockToken: Tokens has already been unlocked');
+            require(lockTokenBalanceEnough, "LockToken: LockToken balance is not enough!");
+        }else{
+            if(!expired || !userSelf || !NotUnlocked || !lockTokenBalanceEnough){
+                return false;
+            }
+        }
         userLockTokenAmount[_forUser] = userLockTokenAmount[_forUser].sub(lockRecords[_lockRecordId].lockTokenAmount);
-        _burn(msg.sender, lockRecords[_lockRecordId].lockTokenAmount);
+        _burn(_burnLockTokenUser, lockRecords[_lockRecordId].lockTokenAmount);
         lockRecords[_lockRecordId].unlocked = true;
         //update token amount in address
         userTokenAmount[_forUser] = userTokenAmount[_forUser].sub(lockRecords[_lockRecordId].tokenAmount);
@@ -448,7 +481,29 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
                 break;
             }
         }
-        emit Unlock(_forUser, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount);
+        //emit Unlock(_forUser, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount);
+        return true;
+    }
+    
+    //force check and unlock all the lock record which can be unlocked for all the users.
+    function forceUnlockAll(uint256 _fromLockRecordId) external onlyAdmin {
+        uint successCount = 0;
+        for(uint index = 0; index < allLockIds.length; index ++){
+            if(allLockIds[index] < _fromLockRecordId){
+                continue;
+            }
+            if(forceUnlock(allLockIds[index])){
+                successCount ++;
+            }
+        }
+        emit ForceUnlockAll(_fromLockRecordId, successCount);
+    }
+    
+    //force check and unlock one lock record if it can be unlocked.
+    function forceUnlock(uint256 _lockRecordId) public nonReentrant onlyAdmin returns (bool) {
+        bool success = _unlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].user, false);
+        emit ForceUnlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount, success);
+        return success;
     }
 
     // stake token for LockToken without lock
@@ -518,5 +573,27 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         LockRecord memory lockRecord = lockRecords[userLockRecordIdArray[_userLockRecordIdsId]];
         return (lockRecord.tokenAmount, lockRecord.lockTokenAmount, lockRecord.lockBlockNumber,
         lockRecord.unlockBlockNumber, lockRecord.unlocked);
+    }
+    
+    //check if _from can transfer to _to address.
+    function canTransfer(address _from, address _to) public view returns (bool){
+        if(!transferEnabled && !transferWhitelist[_from] && !transferWhitelist[_to]){
+            return false;
+        }
+        return true;
+    }
+    
+    function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
+        require(!canTransfer(_msgSender(), recipient), "LockToken: transfer is not allowed!");
+        return super.transfer(recipient, amount);
+    }
+    
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) public virtual override returns (bool) {
+        require(!canTransfer(sender, recipient), "LockToken: transferFrom is not allowed!");
+        return super.transferFrom(sender, recipient, amount);
     }
 }
