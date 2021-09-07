@@ -300,6 +300,10 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     }
 }
 
+interface Bonus {
+    function getStakingBonusMultiplier(address _user, IERC20 _token, uint256 _amount, uint256 _lockTokenBlockNumber) external view returns(uint256);
+}
+
 contract LockToken is ERC20, Ownable, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -308,6 +312,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     mapping(address => bool) public transferWhitelist;
     
     IERC20 public token;
+    Bonus public bonus;
     mapping(uint256 => uint256) public lockTokenBlockNumberAndRatios;
     uint256 constant public denominator = 1000;
 
@@ -353,12 +358,13 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     event TransferWhitelistSet(address _account, bool _canTransfer);
     event AdminSet(address _account, bool _isAdmin);
     event CheckAdminSet(bool _checkAdmin);
+    event BonusSet(Bonus _bonus);
     event MinimumLockQuantitySet(uint256 _minimumLockAmount);
-    event Lock(address User, address ForUser, uint256 TokenAmount, uint256 LockTokenAmount, uint256 LockedBlockNumber);
-    event Unlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount);
-    event ForceUnlockAll(uint256 _fromLockRecordId, uint256 SuccessCount);
-    event ForceUnlock(address User, uint256 LockRecordId, uint256 TokenAmount, uint256 LockTokenAmount, bool Success);
-    event Unstake(address User, uint256 TokenAmount, uint256 LockTokenAmount);
+    event Lock(address _user, address _forUser, uint256 _tokenAmount, uint256 _lockTokenAmount, uint256 _lockTokenBlockNumber);
+    event Unlock(address _user, uint256 _lockRecordId, uint256 _tokenAmount, uint256 _lockTokenAmount);
+    event ForceUnlockAll(uint256 _fromLockRecordId, uint256 _successCount);
+    event ForceUnlock(address _user, uint256 _lockRecordId, uint256 _tokenAmount, uint256 _lockTokenAmount, bool _success);
+    event Unstake(address _user, uint256 _tokenAmount, uint256 _lockTokenAmount);
     
     constructor (string memory _name, string memory _symbol, IERC20 _token, uint256 _stakeTokenRatio, uint256 _minimumLockAmount) ERC20 (_name, _symbol) {
         token = _token;
@@ -391,6 +397,11 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         checkAdmin = _checkAdmin;
         emit CheckAdminSet(_checkAdmin);
     }
+    
+    function setBonus(Bonus _bonus) external onlyOwner {
+        bonus = _bonus;
+        emit BonusSet(_bonus);
+    }
 
     function setLockTokenBlockNumberAndRatio(uint256 _lockTokenBlockNumber, uint256 _lockTokenRatio) external onlyOwner {
         require(_lockTokenBlockNumber > 0, "LockToken: _lockTokenBlockNumber must be greater than 0");
@@ -403,10 +414,16 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         emit MinimumLockQuantitySet(_minimumLockAmount);
     }
 
-    function getLockTokenAmount(uint256 _amount, uint256 _lockTokenBlockNumber) public view returns (uint256 _lockTokenAmount) {
+    function getLockTokenAmount(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) public view returns (uint256 _lockTokenAmount) {
         if(_lockTokenBlockNumber > 0){
             _lockTokenAmount = _amount.mul(lockTokenBlockNumberAndRatios[_lockTokenBlockNumber])
                                 .mul(decimals()).div(denominator).div(ERC20(address(token)).decimals());
+            if(address(bonus) != address(0)){
+                uint256 multiplier = bonus.getStakingBonusMultiplier(_forUser, token, _amount, _lockTokenBlockNumber);
+                if(multiplier > denominator && multiplier <= denominator.mul(100)){
+                    _lockTokenAmount = _lockTokenAmount.mul(multiplier).div(denominator);
+                }
+            }
         }else{
             _lockTokenAmount = _amount.mul(stakeTokenRatio).mul(decimals()).div(denominator).div(ERC20(address(token)).decimals());
         }
@@ -422,7 +439,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         //token.safeApprove(address(this), _amount);
         token.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 unlockBlock = block.number.add(_lockTokenBlockNumber);
-        uint256 lockTokenAmount = getLockTokenAmount(_amount, _lockTokenBlockNumber);
+        uint256 lockTokenAmount = getLockTokenAmount(_forUser, _amount, _lockTokenBlockNumber);
         //update token amount in address
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_amount);
         totalTokenAmount = totalTokenAmount.add(_amount);
@@ -514,7 +531,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         //token.safeApprove(address(this), _tokenAmount);
         token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
         //uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-        uint256 lockTokenAmount = getLockTokenAmount(_tokenAmount, 0);
+        uint256 lockTokenAmount = getLockTokenAmount(_forUser, _tokenAmount, 0);
         userTokenAmount[_forUser] = userTokenAmount[_forUser].add(_tokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].add(_tokenAmount);
         _mint(_forUser, lockTokenAmount);
@@ -529,7 +546,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         require(stakeTokenRatio > 0, "LockToken: unstake not supported");
         require(userStakedToken[_forUser] >= _tokenAmount, "LockToken: unstake amount is greater than staked");
         //uint256 lockTokenAmount = _tokenAmount.mul(stakeTokenRatio).div(denominator);
-        uint256 lockTokenAmount = getLockTokenAmount(_tokenAmount, 0);
+        uint256 lockTokenAmount = getLockTokenAmount(_forUser, _tokenAmount, 0);
         require(_balances[msg.sender] >= lockTokenAmount, "LockToken: LockToken balance is not enough!");
         _burn(msg.sender, lockTokenAmount);
         userStakedToken[_forUser] = userStakedToken[_forUser].sub(_tokenAmount);
