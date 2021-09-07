@@ -362,7 +362,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     event MinimumLockQuantitySet(uint256 _minimumLockAmount);
     event Lock(address _user, address _forUser, uint256 _tokenAmount, uint256 _lockTokenAmount, uint256 _lockTokenBlockNumber);
     event Unlock(address _user, uint256 _lockRecordId, uint256 _tokenAmount, uint256 _lockTokenAmount);
-    event ForceUnlockAll(uint256 _fromLockRecordId, uint256 _successCount);
+    event ForceUnlockAll(uint256 _fromLockRecordId, uint256 _fromLockRecordEndId, uint256 _successCount);
     event ForceUnlock(address _user, uint256 _lockRecordId, uint256 _tokenAmount, uint256 _lockTokenAmount, bool _success);
     event Unstake(address _user, uint256 _tokenAmount, uint256 _lockTokenAmount);
     
@@ -507,15 +507,18 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         require(_fromLockRecordStartId < _fromLockRecordEndId, "LockToken:  _fromLockRecordEndId must be less _fromLockRecordStartId! ");
         require(_fromLockRecordEndId < allLockIds.length, "LockToken : _fromLockRecordEndId must be less allLockIds.length! ");
         uint successCount = 0;
-        for(uint index = _fromLockRecordStartId; index < _fromLockRecordEndId + 1; index ++){
+        for(uint index = 0; index < _fromLockRecordEndId + 1; index ++){
             if(allLockIds[index] < _fromLockRecordStartId){
                 continue;
+            }
+            if(allLockIds[index] > _fromLockRecordEndId){
+                break;
             }
             if(forceUnlock(allLockIds[index])){
                 successCount ++;
             }
         }
-        emit ForceUnlockAll(_fromLockRecordStartId, successCount);
+        emit ForceUnlockAll(_fromLockRecordStartId, _fromLockRecordEndId, successCount);
     }
     
     //force check and unlock one lock record if it can be unlocked.

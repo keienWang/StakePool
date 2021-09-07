@@ -726,12 +726,12 @@ contract MasterChef is Ownable, ReentrancyGuard{
         uint256 startBlock; // Reward start block.
         uint256 endBlock;  // Reward end block.
         uint256 rewarded;// the total sushi has beed reward, including the dev and user harvest
-        uint256 operationFee;// Charged when user operate the pool, only deposit firstly.
-        address operationFeeToken;// empty reprsents charged with mainnet token.
+        uint256 operationFee;// Charged when user operate the pool, only deposit.
+        //address operationFeeToken;// empty reprsents charged with mainnet token.
         uint16 harvestFeeRatio;// Charged when harvest, div RATIO_BASE for the real ratio, like 100 for 10%
         address harvestFeeToken;// empty reprsents charged with mainnet token.
         bool rewardDev;// if reward dev when reward the farmers.
-        bool rewardTokenType; //true => bkr, false => lbkr
+        bool rewardLocked; //if reward locked token or not, true for LockToken, false for token
     }
     
     uint256 private constant ACC_SUSHI_PRECISION = 1e12;
@@ -744,8 +744,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
     uint16 public constant DEV1_FEE_RATIO = 500;// div RATIO_BASE
     uint16 public constant DEV2_FEE_RATIO = 250;// div RATIO_BASE
     uint16 public constant DEV3_FEE_RATIO = 250;// div RATIO_BASE
-    uint16 public harvestFeeBuyRatio = 900;// the buy ratio for harvest, div RATIO_BASE
-    uint16 public harvestFeeDevRatio = 100;// the dev ratio for harvest, div RATIO_BASE
+    uint16 public harvestFeeDevRatio = 100;// the dev ratio for harvest, div RATIO_BASE, RATIO_BASE - dev ratio is for buy
     
     // The SUSHI TOKEN!
     IERC20 public sushi;
@@ -768,19 +767,19 @@ contract MasterChef is Ownable, ReentrancyGuard{
     event Harvest(address indexed user, uint256 indexed pid, uint256 amount);
     event EmergencyStop(address indexed user, address to);
     event Add(uint256 rewardForEachBlock, IERC20 lpToken, bool withUpdate, 
-    uint256 startBlock, uint256 endBlock, uint256 operationFee, address operationFeeToken, 
+    uint256 startBlock, uint256 endBlock, uint256 operationFee, 
     uint16 harvestFeeRatio, address harvestFeeToken, bool withSushiTransfer, bool rewardDev);
-    event SetPoolInfo(uint256 pid, uint256 rewardsOneBlock, bool withUpdate, uint256 startBlock, uint256 endBlock, bool rewardDev);
+    event SetPoolInfo(uint256 pid, uint256 rewardsOneBlock, bool withUpdate, uint256 startBlock, uint256 endBlock, bool rewardDev, bool rewardLocked);
     event ClosePool(uint256 pid, address payable to);
     event UpdateDev1Address(address payable dev1Address);
     event UpdateDev2Address(address payable dev2Address);
     event UpdateDev3Address(address payable dev3Address);
     event UpdateBuyAddress(address payable buyAddress);
     event AddRewardForPool(uint256 pid, uint256 addSushiPerPool, uint256 addSushiPerBlock, bool withSushiTransfer);
-    event SetPoolOperationFee(uint256 pid, uint256 operationFee, address operationFeeToken, bool feeUpdate, bool feeTokenUpdate);
+    event SetPoolOperationFee(uint256 pid, uint256 operationFee);
     event SetPoolHarvestFee(uint256 pid, uint16 harvestFeeRatio, address harvestFeeToken, bool feeRatioUpdate, bool feeTokenUpdate);
     event SetTokenAmountContract(TokenAmountLike tokenAmountContract);
-    event SetHarvestFeeRatio(uint16 harvestFeeBuyRatio, uint16 harvestFeeDevRatio);
+    event SetHarvestFeeRatio(uint16 harvestFeeDevRatio);
     modifier validatePoolByPid(uint256 _pid) {
         require(_pid < poolInfo .length, "Pool does not exist");
         _;
@@ -820,18 +819,17 @@ contract MasterChef is Ownable, ReentrancyGuard{
     }
     
     // Update the harvest fee ratio
-    function setHarvestFeeRatio(uint16 _harvestFeeBuyRatio, uint16 _harvestFeeDevRatio) external onlyOwner {
-        require((_harvestFeeBuyRatio.add(_harvestFeeDevRatio)) == RATIO_BASE, "The sum must be 1000!");
-        harvestFeeBuyRatio = _harvestFeeBuyRatio;
+    function setHarvestFeeRatio(uint16 _harvestFeeDevRatio) external onlyOwner {
+        require(_harvestFeeDevRatio <= RATIO_BASE, "The _harvestFeeDevRatio must be less than or equals 1000!");
         harvestFeeDevRatio = _harvestFeeDevRatio;
-        emit SetHarvestFeeRatio(_harvestFeeBuyRatio, _harvestFeeDevRatio);
+        emit SetHarvestFeeRatio(_harvestFeeDevRatio);
     }
     
     // Add a new lp to the pool. Can only be called by the owner.
     // Zero lpToken represents mainnet coin pool.
     function add(uint256 _rewardForEachBlock, IERC20 _lpToken, bool _withUpdate, 
-        uint256 _startBlock, uint256 _endBlock, uint256 _operationFee, address _operationFeeToken, 
-        uint16 _harvestFeeRatio, address _harvestFeeToken, bool _withSushiTransfer, bool _rewardDev, bool _rewardTokenType) external onlyOwner {
+        uint256 _startBlock, uint256 _endBlock, uint256 _operationFee, 
+        uint16 _harvestFeeRatio, address _harvestFeeToken, bool _withSushiTransfer, bool _rewardDev, bool _rewardLocked) external onlyOwner {
         //require(_lpToken != IERC20(ZERO), "lpToken can not be zero!");
         require(_rewardForEachBlock > ZERO, "rewardForEachBlock must be greater than zero!");
         require(_startBlock < _endBlock, "start block must less than end block!");
@@ -848,21 +846,21 @@ contract MasterChef is Ownable, ReentrancyGuard{
             endBlock: _endBlock,
             rewarded: ZERO,
             operationFee: _operationFee,
-            operationFeeToken: _operationFeeToken,
+            //operationFeeToken: _operationFeeToken,
             harvestFeeRatio: _harvestFeeRatio,
             harvestFeeToken: _harvestFeeToken,
             rewardDev: _rewardDev,
-            rewardTokenType: _rewardTokenType
+            rewardLocked: _rewardLocked
         }));
         if(_withSushiTransfer){
             uint256 amount = (_endBlock - (block.number > _startBlock ? block.number : _startBlock)).mul(_rewardForEachBlock);
             sushi.safeTransferFrom(msg.sender, address(this), amount);
         }
-        emit Add(_rewardForEachBlock, _lpToken, _withUpdate, _startBlock, _endBlock, _operationFee, _operationFeeToken, _harvestFeeRatio, _harvestFeeToken, _withSushiTransfer, _rewardDev);
+        emit Add(_rewardForEachBlock, _lpToken, _withUpdate, _startBlock, _endBlock, _operationFee, _harvestFeeRatio, _harvestFeeToken, _withSushiTransfer, _rewardDev);
     }
 
     // Update the given pool's pool info. Can only be called by the owner. 
-    function setPoolInfo(uint256 _pid, uint256 _rewardForEachBlock, bool _withUpdate, uint256 _startBlock, uint256 _endBlock, bool _rewardDev, bool _rewardTokenType) external validatePoolByPid(_pid) onlyOwner {
+    function setPoolInfo(uint256 _pid, uint256 _rewardForEachBlock, bool _withUpdate, uint256 _startBlock, uint256 _endBlock, bool _rewardDev, bool _rewardLocked) external validatePoolByPid(_pid) onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -885,28 +883,23 @@ contract MasterChef is Ownable, ReentrancyGuard{
             pool.rewardForEachBlock = _rewardForEachBlock;
         }
         pool.rewardDev = _rewardDev;
-        pool.rewardTokenType = _rewardTokenType;
-        emit SetPoolInfo(_pid, _rewardForEachBlock, _withUpdate, _startBlock, _endBlock, _rewardDev);
+        pool.rewardLocked = _rewardLocked;
+        emit SetPoolInfo(_pid, _rewardForEachBlock, _withUpdate, _startBlock, _endBlock, _rewardDev, _rewardLocked);
     }
     
-    function setAllPoolOperationFee(uint256 _operationFee, address _operationFeeToken, bool _feeUpdate, bool _feeTokenUpdate) external onlyOwner {
+    function setAllPoolOperationFee(uint256 _operationFee) external onlyOwner {
         uint256 length = poolInfo.length;
         for (uint256 pid = ZERO; pid < length; ++ pid) {
-            setPoolOperationFee(pid, _operationFee, _operationFeeToken, _feeUpdate, _feeTokenUpdate);
+            setPoolOperationFee(pid, _operationFee);
         }
     }
     
     // Update the given pool's operation fee
-    function setPoolOperationFee(uint256 _pid, uint256 _operationFee, address _operationFeeToken, bool _feeUpdate, bool _feeTokenUpdate) public validatePoolByPid(_pid) onlyOwner {
+    function setPoolOperationFee(uint256 _pid, uint256 _operationFee) public validatePoolByPid(_pid) onlyOwner {
         updatePool(_pid);
         PoolInfo storage pool = poolInfo[_pid];
-        if(_feeUpdate){
-            pool.operationFee = _operationFee;
-        }
-        if(_feeTokenUpdate){
-            pool.operationFeeToken = _operationFeeToken;
-        }
-        emit SetPoolOperationFee(_pid, _operationFee, _operationFeeToken, _feeUpdate, _feeTokenUpdate);
+        pool.operationFee = _operationFee;
+        emit SetPoolOperationFee(_pid, _operationFee);
     }
     
     function setAllPoolHarvestFee(uint16 _harvestFeeRatio, address _harvestFeeToken, bool _feeRatioUpdate, bool _feeTokenUpdate) external onlyOwner {
@@ -980,10 +973,10 @@ contract MasterChef is Ownable, ReentrancyGuard{
     function transferToDev(PoolInfo storage _pool, address _devAddress, uint16 _devRatio, uint256 _sushiReward) private returns (uint256 amount){
         if(_devRatio > ZERO){
             amount = _sushiReward.mul(_devRatio).div(RATIO_BASE);
-            if (_pool.rewardTokenType){
-                safeTransferTokenFromThis(sushi, _devAddress, _amount);
+            if (_pool.rewardLocked){
+                safeTransferTokenFromThis(sushi, _devAddress, _sushiReward);
             }else{
-                safeLockTokenFromThis(sushi, _devAddress, amount);
+                safeLockTokenFromThis(sushi, _devAddress, _sushiReward);
             }
 
             _pool.rewarded = _pool.rewarded.add(amount);
@@ -1058,24 +1051,14 @@ contract MasterChef is Ownable, ReentrancyGuard{
             uint256 dev1Amount = _pool.operationFee.mul(DEV1_FEE_RATIO).div(RATIO_BASE);
             uint256 dev2Amount = _pool.operationFee.mul(DEV2_FEE_RATIO).div(RATIO_BASE);
             uint256 dev3Amount = _pool.operationFee.sub(dev1Amount).sub(dev2Amount);
-            if(isMainnetToken(_pool.operationFeeToken)){
-                if(_pool.lpToken != IERC20(address(0))){
-                    require(msg.value == _pool.operationFee, "Fee is not enough or too much!");
-                }else{//if pool is mainnet coin
-                    require((msg.value.sub(_amount)) == _pool.operationFee, "Fee is not enough or too much!");
-                }
-                dev1Address.transfer(dev1Amount);
-                dev2Address.transfer(dev2Amount);
-                dev3Address.transfer(dev3Amount);
-            }else{
-                IERC20 token = IERC20(_pool.operationFeeToken);
-                uint feeBalance = token.balanceOf(msg.sender);
-                require(feeBalance >= _pool.operationFee, "Fee is not enough!");
-                token.safeTransferFrom(msg.sender, address(this), _pool.operationFee);
-                token.safeTransfer(dev1Address, dev1Amount);
-                token.safeTransfer(dev2Address, dev2Amount);
-                token.safeTransfer(dev3Address, dev3Amount);
+            if(_pool.lpToken != IERC20(address(0))){
+                require(msg.value == _pool.operationFee, "Fee is not enough or too much!");
+            }else{//if pool is mainnet coin
+                require((msg.value.sub(_amount)) == _pool.operationFee, "Fee is not enough or too much!");
             }
+            dev1Address.transfer(dev1Amount);
+            dev2Address.transfer(dev2Amount);
+            dev3Address.transfer(dev3Amount);
         }
     }
     
@@ -1142,7 +1125,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
         if (pending > ZERO) {
             success = true;
             checkHarvestFee(pool, pending);
-            if (pool.rewardTokenType){
+            if (pool.rewardLocked){
                 safeTransferTokenFromThis(sushi, _to, pending);
             }else{
                 safeLockTokenFromThis(sushi, _to, pending);
