@@ -362,7 +362,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     event MinimumLockQuantitySet(uint256 _minimumLockAmount);
     event Lock(address _user, address _forUser, uint256 _tokenAmount, uint256 _lockTokenAmount, uint256 _lockTokenBlockNumber);
     event Unlock(address _user, uint256 _lockRecordId, uint256 _tokenAmount, uint256 _lockTokenAmount);
-    event ForceUnlockAll(uint256 _fromLockRecordId, uint256 _fromLockRecordEndId, uint256 _successCount);
+    event ForceUnlockAll(uint256 _fromLockRecordId, uint256 _toLockRecordId, uint256 _successCount);
     event ForceUnlock(address _user, uint256 _lockRecordId, uint256 _tokenAmount, uint256 _lockTokenAmount, bool _success);
     event Unstake(address _user, uint256 _tokenAmount, uint256 _lockTokenAmount);
     
@@ -502,30 +502,27 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         return true;
     }
     
-    //force check and unlock all the lock record which can be unlocked for all the users.
-    function forceUnlockAll(uint256 _fromLockRecordStartLen, uint256 _fromLockRecordEndLen) external onlyAdmin {
-        require(_fromLockRecordStartLen < _fromLockRecordEndLen, "LockToken:  _fromLockRecordEndLen must be less _fromLockRecordStartLen! ");
-        require(_fromLockRecordEndLen <= allLockIds.length, "LockToken : _fromLockRecordEndLen must be less allLockIds.length! ");
+    function forceUnlockAll(uint256 _fromLockRecordId, uint256 _toLockRecordId) external onlyAdmin {
         uint successCount = 0;
-        for(uint index = 0; index < _fromLockRecordEndLen + 1; index ++){
-            if(index < _fromLockRecordStartLen){
+        for(uint index = 0; index < allLockIds.length; index ++){
+            if(allLockIds[index] < _fromLockRecordId){
                 continue;
             }
-            if(index > _fromLockRecordEndLen){
+            if(allLockIds[index] > _toLockRecordId){
                 break;
             }
-            if(forceUnlock(index)){
+            if(forceUnlock(allLockIds[index])){
                 successCount ++;
             }
         }
-        emit ForceUnlockAll(_fromLockRecordStartLen, _fromLockRecordEndLen, successCount);
+        emit ForceUnlockAll(_fromLockRecordId, _toLockRecordId, successCount);
     }
     
     //force check and unlock one lock record if it can be unlocked.
-    function forceUnlock(uint256 _lockRecordLen) public onlyAdmin returns (bool) {
-        require(_lockRecordLen <= allLockIds.length, "LockToken : _lockRecordLen must be less or equal allLockIds.length!");
-        bool success = _unlock(lockRecords[_lockRecordLen].user, _lockRecordLen, lockRecords[_lockRecordLen].user, false);
-        emit ForceUnlock(lockRecords[_lockRecordLen].user, _lockRecordLen, lockRecords[_lockRecordLen].tokenAmount, lockRecords[_lockRecordLen].lockTokenAmount, success);
+    function forceUnlock(uint256 _lockRecordId) public onlyAdmin returns (bool) {
+        require(_lockRecordId <= allLockIds[allLockIds.length - 1], "LockToken : _lockRecordId must be less or equal allLockIds[allLockIds.length - 1]!");
+        bool success = _unlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].user, false);
+        emit ForceUnlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount, success);
         return success;
     }
 
@@ -600,14 +597,6 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     
     //check if _from can transfer to _to address.
     function canTransfer(address _from, address _to) public view returns (bool){
-        // if (transferEnabled){
-        //     return true;
-        // }else{
-        //     if (transferWhitelist[_from] || transferWhitelist[_to]){
-        //         return true;
-        //     }
-        // }
-        // return false;
         if(!transferEnabled && !transferWhitelist[_from] && !transferWhitelist[_to]){
             return false;
         }
