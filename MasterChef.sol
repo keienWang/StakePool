@@ -1199,7 +1199,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
             lockToken.lock(_to, bal, lockBlockNumber);
         } else {
             // _token.safeTransfer(_to, _amount);
-            _token.safeIncreaseAllowance(address(lockToken), bal);
+            _token.safeIncreaseAllowance(address(lockToken), _amount);
             lockToken.lock(_to, _amount, lockBlockNumber);
         }
     }
