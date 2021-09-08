@@ -503,29 +503,29 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     }
     
     //force check and unlock all the lock record which can be unlocked for all the users.
-    function forceUnlockAll(uint256 _fromLockRecordStartId, uint256 _fromLockRecordEndId) external onlyAdmin {
-        require(_fromLockRecordStartId < _fromLockRecordEndId, "LockToken:  _fromLockRecordEndId must be less _fromLockRecordStartId! ");
-        require(_fromLockRecordEndId < allLockIds.length, "LockToken : _fromLockRecordEndId must be less allLockIds.length! ");
+    function forceUnlockAll(uint256 _fromLockRecordStartLen, uint256 _fromLockRecordEndLen) external onlyAdmin {
+        require(_fromLockRecordStartLen < _fromLockRecordEndLen, "LockToken:  _fromLockRecordEndLen must be less _fromLockRecordStartLen! ");
+        require(_fromLockRecordEndLen <= allLockIds.length, "LockToken : _fromLockRecordEndLen must be less allLockIds.length! ");
         uint successCount = 0;
-        for(uint index = 0; index < _fromLockRecordEndId + 1; index ++){
-            if(allLockIds[index] < _fromLockRecordStartId){
+        for(uint index = 0; index < _fromLockRecordEndLen + 1; index ++){
+            if(index < _fromLockRecordStartLen){
                 continue;
             }
-            if(allLockIds[index] > _fromLockRecordEndId){
+            if(index > _fromLockRecordEndLen){
                 break;
             }
-            if(forceUnlock(allLockIds[index])){
+            if(forceUnlock(index)){
                 successCount ++;
             }
         }
-        emit ForceUnlockAll(_fromLockRecordStartId, _fromLockRecordEndId, successCount);
+        emit ForceUnlockAll(_fromLockRecordStartLen, _fromLockRecordEndLen, successCount);
     }
     
     //force check and unlock one lock record if it can be unlocked.
-    function forceUnlock(uint256 _lockRecordId) public nonReentrant onlyAdmin returns (bool) {
-        require(_lockRecordId < allLockIds.length, "LockToken : _lockRecordId must be less allLockIds.length!");
-        bool success = _unlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].user, false);
-        emit ForceUnlock(lockRecords[_lockRecordId].user, _lockRecordId, lockRecords[_lockRecordId].tokenAmount, lockRecords[_lockRecordId].lockTokenAmount, success);
+    function forceUnlock(uint256 _lockRecordLen) public onlyAdmin returns (bool) {
+        require(_lockRecordLen <= allLockIds.length, "LockToken : _lockRecordLen must be less or equal allLockIds.length!");
+        bool success = _unlock(lockRecords[_lockRecordLen].user, _lockRecordLen, lockRecords[_lockRecordLen].user, false);
+        emit ForceUnlock(lockRecords[_lockRecordLen].user, _lockRecordLen, lockRecords[_lockRecordLen].tokenAmount, lockRecords[_lockRecordLen].lockTokenAmount, success);
         return success;
     }
 
@@ -600,6 +600,14 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     
     //check if _from can transfer to _to address.
     function canTransfer(address _from, address _to) public view returns (bool){
+        // if (transferEnabled){
+        //     return true;
+        // }else{
+        //     if (transferWhitelist[_from] || transferWhitelist[_to]){
+        //         return true;
+        //     }
+        // }
+        // return false;
         if(!transferEnabled && !transferWhitelist[_from] && !transferWhitelist[_to]){
             return false;
         }
@@ -607,7 +615,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
     }
     
     function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
-        require(!canTransfer(_msgSender(), recipient), "LockToken: transfer is not allowed!");
+        require(canTransfer(_msgSender(), recipient), "LockToken: transfer is not allowed!");
         return super.transfer(recipient, amount);
     }
     
@@ -616,7 +624,7 @@ contract LockToken is ERC20, Ownable, ReentrancyGuard{
         address recipient,
         uint256 amount
     ) public virtual override returns (bool) {
-        require(!canTransfer(sender, recipient), "LockToken: transferFrom is not allowed!");
+        require(canTransfer(sender, recipient), "LockToken: transferFrom is not allowed!");
         return super.transferFrom(sender, recipient, amount);
     }
 }
