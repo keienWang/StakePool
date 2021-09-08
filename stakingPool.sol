@@ -130,7 +130,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard {
         _requireNonZeroAmount(_amount);
         require(_forUser != address(0), 'StakingPool : _forUser can not be Zero');
         if (!admins[msg.sender]){
-            require(_amount >= minimumLockAmount, 'LockToken: token amount must be greater than minimumLockAmount');
+            require(_amount >= minimumLockAmount, 'StakingPool: token amount must be greater than minimumLockAmount');
         }
         harvestAll(_forUser);
         token.safeTransferFrom(msg.sender, address(this), _amount);
