@@ -72,6 +72,9 @@ interface CatLike {
 */
 
 contract Flipper is LibNote {
+    event BidEnabledSet(bool _bidEnabled);
+    event BidWhitelistSet(address _account, bool _canBid);
+    
     // --- Auth ---
     mapping (address => uint256) public wards;
     function rely(address usr) external note auth { wards[usr] = 1; }
@@ -80,6 +83,9 @@ contract Flipper is LibNote {
         require(wards[msg.sender] == 1, "Flipper/not-authorized");
         _;
     }
+    
+    bool public bidEnabled;//if bid can be processed by everyone
+    mapping(address => bool) public bidWhitelist;//the bid whitelist address when bidEnabled is false
 
     // --- Data ---
     struct Bid {
@@ -121,6 +127,17 @@ contract Flipper is LibNote {
         cat = CatLike(cat_);
         ilk = ilk_;
         wards[msg.sender] = 1;
+        bidEnabled = false;
+    }
+    
+    function setBidEnabled(bool bidEnabled_) external note auth {
+        bidEnabled = bidEnabled_;
+        emit BidEnabledSet(bidEnabled_);
+    }
+    
+    function setBidWhitelist(address account, bool canBid) external note auth {
+        bidWhitelist[account] = canBid;
+        emit BidWhitelistSet(account, canBid);
     }
 
     // --- Math ---
@@ -167,7 +184,12 @@ contract Flipper is LibNote {
         require(bids[id].tic == 0, "Flipper/bid-already-placed");
         bids[id].end = add(uint48(now), tau);
     }
+    function checkBidAuth(address account) public view returns(bool) {
+        require(bidEnabled || bidWhitelist[account], "Flipper/bid-not-allow-for-user");
+        return true;
+    }
     function tend(uint256 id, uint256 lot, uint256 bid) external note {
+        checkBidAuth(msg.sender);
         require(bids[id].guy != address(0), "Flipper/guy-not-set");
         require(bids[id].tic > now || bids[id].tic == 0, "Flipper/already-finished-tic");
         require(bids[id].end > now, "Flipper/already-finished-end");
@@ -187,6 +209,7 @@ contract Flipper is LibNote {
         bids[id].tic = add(uint48(now), ttl);
     }
     function dent(uint256 id, uint256 lot, uint256 bid) external note {
+        checkBidAuth(msg.sender);
         require(bids[id].guy != address(0), "Flipper/guy-not-set");
         require(bids[id].tic > now || bids[id].tic == 0, "Flipper/already-finished-tic");
         require(bids[id].end > now, "Flipper/already-finished-end");
