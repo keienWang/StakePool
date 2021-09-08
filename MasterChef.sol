@@ -1105,13 +1105,11 @@ contract MasterChef is Ownable, ReentrancyGuard{
         emit EmergencyWithdraw(msg.sender, _pid, oldAmount);
     }
 
-    function harvest(uint256 _pid, address _to)external validatePoolByPid(_pid) returns (bool success){
+    function harvest(uint256 _pid, address _to) external payable validatePoolByPid(_pid) returns (bool success){
        return _harvest(_pid, _to, false);
     }
 
-
-    function _harvest(uint256 _pid, address _to, bool isInternal) internal validatePoolByPid(_pid) returns (bool success) {
-
+    function _harvest(uint256 _pid, address _to, bool isInternal) internal payable nonReentrant validatePoolByPid(_pid) returns (bool success) {
         if(_to == address(0)){
             _to = msg.sender;
         }
@@ -1120,7 +1118,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
         updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accSushiPerShare).div(ACC_SUSHI_PRECISION).sub(user.rewardDebt);
         if (!isInternal){
-            require(pending > stakingPool.minimumLockAmount(),"reward too low!");
+            require(pending > stakingPool.minimumLockAmount(), "reward too low!");
         }
         if (pending > ZERO) {
             success = true;
@@ -1203,6 +1201,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
             stakingPool.lock(_to, _amount, lockBlockNumber);
         }
     }
+    
     function safeTransferTokenFromThis(IERC20 _token, address _to, uint256 _amount) internal {
         uint256 bal = _token.balanceOf(address(this));
         if (_amount > bal) {
