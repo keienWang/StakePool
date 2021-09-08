@@ -1195,11 +1195,11 @@ contract MasterChef is Ownable, ReentrancyGuard{
         uint256 bal = _token.balanceOf(address(this));
         if (_amount > bal) {
             // _token.safeTransfer(_to, bal);
-            sushi.safeIncreaseAllowance(address(lockToken), bal);
+            _token.safeIncreaseAllowance(address(lockToken), bal);
             lockToken.lock(_to, bal, lockBlockNumber);
         } else {
             // _token.safeTransfer(_to, _amount);
-            sushi.safeIncreaseAllowance(address(lockToken), bal);
+            _token.safeIncreaseAllowance(address(lockToken), bal);
             lockToken.lock(_to, _amount, lockBlockNumber);
         }
     }
