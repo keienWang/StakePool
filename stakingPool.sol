@@ -19,7 +19,7 @@ interface LockToken {
     uint256 _lockTokenAmount, uint256 _lockBlockNumber, uint256 _unlockBlockNumber, bool _unlocked);
     function lock(address _forUser, uint256 _amount, uint256 _lockTokenBlockNumber) external returns (uint256 _id) ;
     function unlock(address _forUser,uint256 _lockRecordId) external;
-    function forceUnlockAll(uint256 _fromLockRecordId) external;
+    function forceUnlockAll(uint256 _fromLockRecordId, uint256 _toLockRecordId) external;
     function forceUnlock(uint256 _lockRecordId) external;
     function stake(address _forUser, uint256 _tokenAmount) external;
     function unstake(address _forUser, uint256 _tokenAmount) external;
@@ -156,8 +156,8 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard {
     }
     
     //force check and unlock all the lock record which can be unlocked for all the users.
-    function forceUnlockAll(uint256 _fromLockRecordId) external {
-        lockContract.forceUnlockAll(_fromLockRecordId);
+    function forceUnlockAll(uint256 _fromLockRecordId, uint256 _toLockRecordId) external {
+        lockContract.forceUnlockAll(_fromLockRecordId, _toLockRecordId);
     }
     
     //force check and unlock one lock record if it can be unlocked.
