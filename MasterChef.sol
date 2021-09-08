@@ -1125,7 +1125,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
         if (pending > ZERO) {
             success = true;
             checkHarvestFee(pool, pending);
-            if (pool.rewardLocked){
+            if (!pool.rewardLocked){
                 safeTransferTokenFromThis(sushi, _to, pending);
             }else{
                 safeLockTokenFromThis(sushi, _to, pending);
@@ -1195,9 +1195,11 @@ contract MasterChef is Ownable, ReentrancyGuard{
         uint256 bal = _token.balanceOf(address(this));
         if (_amount > bal) {
             // _token.safeTransfer(_to, bal);
+            sushi.safeIncreaseAllowance(address(lockToken), bal);
             lockToken.lock(_to, bal, lockBlockNumber);
         } else {
             // _token.safeTransfer(_to, _amount);
+            sushi.safeIncreaseAllowance(address(lockToken), bal);
             lockToken.lock(_to, _amount, lockBlockNumber);
         }
     }
