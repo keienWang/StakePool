@@ -201,9 +201,9 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard {
             if(reward > 0){
                 _rewardToken.safeTransfer(_forUser, reward);
                 emit Harvest(_forUser, _rewardToken, reward);
-                _updateUserSnapshot(_forUser, _rewardToken);
             }
         }
+        _updateUserSnapshot(_forUser, _rewardToken);
     }
 
     function harvestAll(address _forUser) public {
@@ -238,7 +238,7 @@ contract StakingPool is Ownable, CheckContract, BaseMath, ReentrancyGuard {
         require(address(_rewardToken) != address(0), 'StakingPool: _rewardToken can not be Zero');
         require(address(_user) != address(0), 'StakingPool: _user can not be Zero');
         uint256 tokenSnapshot = userRewardSnapshots[_user][_rewardToken];
-        (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(msg.sender);
+        (, uint256 _lockTokenAmount) = lockContract.getUserAllStakedToken(_user);
          if (_userHasStake(_lockTokenAmount)){
              return _lockTokenAmount.mul(totalRewardsPerStaked[_rewardToken].sub(tokenSnapshot)).div(REWARD_PRECISION);
          }else{
