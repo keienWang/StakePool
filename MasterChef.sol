@@ -1109,7 +1109,7 @@ contract MasterChef is Ownable, ReentrancyGuard{
        return _harvest(_pid, _to, false);
     }
 
-    function _harvest(uint256 _pid, address _to, bool isInternal) internal payable nonReentrant validatePoolByPid(_pid) returns (bool success) {
+    function _harvest(uint256 _pid, address _to, bool isInternal) internal nonReentrant validatePoolByPid(_pid) returns (bool success) {
         if(_to == address(0)){
             _to = msg.sender;
         }
